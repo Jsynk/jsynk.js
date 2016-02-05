@@ -304,7 +304,7 @@
                 'rev': {
                     'changes': {},
                     'current': '',
-                    'max_history': -1
+                    'max_history': 1
                 },
                 'sub': {
                     'list': []
@@ -355,7 +355,6 @@
                 ret_val = [];
                 jk.traverse_fun({
                     'fn': function(args, fn) {
-                        console.log(args);
                         args.list.push(args.self.get({'path':args.path,'rev_id':args.target_rev}));
                         var rev = args.self._instance.rev;
                         var rev_changes = rev.changes;
@@ -459,7 +458,7 @@
                     if (path != '' && rev.current != '') {
                         var prev_indexes = changes[rev.current].indexes;
                         for (var i_i in prev_indexes) {
-                            if (cur_indexes[i_i] == undefined) {
+                            if (!cur_indexes.hasOwnProperty(i_i)) {
                                 cur_indexes[i_i] = prev_indexes[i_i];
                             }
                         }
@@ -713,14 +712,25 @@
                     'namespace': namespace,
                     'once': once
                 });
-                // if (instance.sub.list_indexes[path] == undefined) {
-                //     instance.sub.list_indexes[path] = {'ns':{}}
-                // }
-
-                // todo index subs for unsubbing index[path] = {all:{subcribers_index},'namespace':[]}
             }
         }
-        jsp.off = function(args) {}
+        jsp.off = function(args) {
+            var args_typeof = jk.typeof(args);
+            var instance = this._instance;
+            var instance_sub_list = instance.sub.list;
+            for (var i = instance_sub_list.length - 1; i >= 0; i--) {
+                var sub = instance_sub_list[i];
+                var remove = false;
+                var ns = sub.namespace;
+                if (args_typeof == 'string') {
+                    if (args == ns) {remove = true; }
+                }
+                if (args_typeof == 'regexp') {
+                    if (args.test(ns)) {remove = true; }
+                }
+                if (remove) { instance_sub_list.splice(i, 1); }
+            }
+        }
         jsp.on_before_set = function(args) {
             var args = args || {};
             var path = args.path || '';
@@ -997,7 +1007,7 @@
         // jkp.validate_recursive = function(args, level) {}
 
         // IMPORTANT TODO - make secure remove support for self executing functions
-        // Should bot be used on client
+        // Should never be used on client
         jkp.parse = function(ref, options) {
             return eval(ref);
         }

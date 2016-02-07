@@ -871,8 +871,9 @@
         }
         
         
-        
-        // TODO - support stop/replace animation
+
+
+
         function Animator(args){};
         var anip = Animator.prototype;
         jkp.Animator = Animator;
@@ -897,42 +898,90 @@
         anip.queue = [];
         anip.is_animating = false;
         anip.animate = function(args){
-            this.queue.push(args);
-            if(!this.is_animating){
-                raf(this.tick);
+            var args_typeof = jk.typeof(args);
+            if (args_typeof == 'object') {
+                var from = args.from;
+                var to = args.to;
+                var fn = args.fn;
+                if (typeof(from) == 'number' && 
+                    typeof(to) == 'number' && 
+                    typeof(fn) == 'function') {
+                    var duration = args.duration || 500;
+                    var namespace = args.namespace || '';
+                    var start_time = new Date().getTime();
+
+                    var ani = {
+                        'from': from, 'to': to, 'fn': fn,
+                        'duration': duration, 
+                        'namespace': namespace, 
+                        'start_time': start_time
+                    };
+                    this.queue.push(ani);
+                    if(!this.is_animating){
+                        raf(this.tick);
+                    }
+                }
+                
             }
         }
         anip.tick = function(){
             var self = jk.Animator.prototype;
             var is_animating = false;
             var cur_time = new Date().getTime();
-            for (var i = 0; i < self.queue.length; i++) {
-                var ani = self.queue[i];
-                if (ani.to !== ani.from) {
-                    var diff_time = cur_time - ani.start_time;
-                    var abs_percent = diff_time/ani.duration;
-                    // linear
-                    var percent = abs_percent < 1 ? abs_percent : 1;
-                    // Swing
-                    var anim_percent = Math.sin((Math.PI/2)*percent);
-                    var cur_val = ani.from + (ani.to-ani.from)*anim_percent;
-                    var tick_info = {
-                        'cur_time':cur_time, 'diff_time': diff_time,
-                        'abs_percent': abs_percent, 'percent': percent,
-                        'anim_percent': anim_percent, 'cur_val': cur_val
-                    };
-                    ani.fn(tick_info, ani);
-                    if(percent < 1){
-                        is_animating = true;
-                    }
+            var queue = self.queue;
+            var remove = [];
+            for (var i = 0; i < queue.length; i++) {
+                var ani = queue[i];
+                var diff_time = cur_time - ani.start_time;
+                var abs_percent = diff_time/ani.duration;
+                // linear
+                var percent = abs_percent < 1 ? abs_percent : 1;
+                // Swing
+                var anim_percent = Math.sin((Math.PI/2)*percent);
+                var cur_val = ani.from + (ani.to-ani.from)*anim_percent;
+                var tick_info = {
+                    'cur_time':cur_time, 'diff_time': diff_time,
+                    'abs_percent': abs_percent, 'percent': percent,
+                    'anim_percent': anim_percent, 'cur_val': cur_val
+                };
+                ani.fn(tick_info, ani);
+                if(percent < 1){
+                    is_animating = true;
                 }
+                else {
+                    remove.push(i);
+                }
+            }
+            for (var i = remove.length - 1; i >= 0; i--) {
+                var index = remove[i];
+                queue.splice(index, 1);
             }
             self.is_animating = is_animating;            
             if (self.is_animating){
                 raf(self.tick);
             }
         }
+        anip.stop = function(args) {
+            var args_typeof = jk.typeof(args);
+            var self = jk.Animator.prototype;
+            var queue = self.queue;
+            for (var i = queue.length - 1; i >= 0; i--) {
+                var ani = queue[i];
+                var remove = false;
+                var ns = ani.namespace;
+                if (args_typeof == 'string') {
+                    if (args == ns) {remove = true; }
+                }
+                if (args_typeof == 'regexp') {
+                    if (args.test(ns)) {remove = true; }
+                }
+                if (remove) { queue.splice(i, 1); }
+            }
+        }
         // swing = Math.sin((Math.PI/2)*progress_precent)
+
+
+
 
         jkp.stringify = function(ref, options) {
             var jss_parts = [];

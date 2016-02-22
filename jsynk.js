@@ -296,6 +296,13 @@
             }
             return ret_val;
         }
+        jkp.get_typeofs = function(args){
+            var ret_val = {};
+            for (var i in args){
+                ret_val[i] = jk.typeof(args[i]);
+            }
+            return ret_val;
+        }
 
         function jSub(args) {
             var args = args || {};
@@ -387,12 +394,35 @@
             return ret_val;
         }
         jsp.set = function(args) {
-            if (typeof(args) == 'object') {
-                var value = args.value;
-                var path = args.path || '';
-                var paths = [''];
-                var instance = args.instance || this._instance;
-                var ignore = args.ignore || instance.ignore || /^p_ignore$/;
+            var has_val = false;
+            var value, path, paths, instance, ignore;
+
+            var typeofs = jk.get_typeofs(arguments);
+
+            if (arguments.length == 1) {
+                if (typeofs[0] == 'object') {
+                    value = args.value;
+                    path = args.path || '';
+                    paths = [''];
+                    instance = args.instance || this._instance;
+                    ignore = args.ignore || instance.ignore || /^p_ignore$/;
+
+                    has_val = true;
+                }
+            }
+            else if (arguments.length == 2) {
+                if (typeofs[0] == 'string') {
+                    value = arguments[1];
+                    path = arguments[0] || '';
+                    paths = [''];
+                    instance = this._instance;
+                    ignore = instance.ignore || /^p_ignore$/;
+
+                    has_val = true;
+                }
+            }
+
+            if (has_val) {
 
                 var rev = instance.rev;
                 var changes = rev.changes;
@@ -695,16 +725,57 @@
                 }
             }
         }
+        // Add options on what args return
         jsp.on = function(args) {
-            var args = args || {};
-            var path = args.path || '';
-            var instance = args.instance || this._instance;
-            var namespace = args.namespace || '';
-            var fn = args.fn;
-            var fn_args = args.fn_args;
-            var once = args.once;
+            var has_val = false;
+            var path, instance, namespace, fn, fn_args, once;
 
-            if (fn) {
+            var typeofs = jk.get_typeofs(arguments);
+
+            if (arguments.length == 1) {
+                if (typeofs[0] == 'object') {
+                    path = args.path || '';
+                    instance = args.instance || this._instance;
+                    namespace = args.namespace || '';
+                    fn = args.fn;
+                    fn_args = args.fn_args;
+                    once = args.once;
+
+                    has_val = true;
+                }
+            }
+            else if (arguments.length == 2) {
+                if ((typeofs[0] == 'regexp' || typeofs[0] == 'string') && typeofs[1] == 'function') {
+                    path = arguments[0] || '';
+                    instance = this._instance;
+                    namespace = '';
+                    fn = arguments[1];
+
+                    has_val = true;
+                }
+            }
+            else if (arguments.length == 3) {
+                if ((typeofs[0] == 'regexp' || typeofs[0] == 'string') && typeofs[1] == 'boolean' && typeofs[2] == 'function') {
+                    path = arguments[0] || '';
+                    instance = this._instance;
+                    namespace = '';
+                    fn = arguments[2];
+                    once = arguments[1];
+
+                    has_val = true;
+                }
+                else if ((typeofs[0] == 'regexp' || typeofs[0] == 'string') && typeofs[1] == 'string' && typeofs[2] == 'function') {
+                    path = arguments[0] || '';
+                    instance = this._instance;
+                    namespace = arguments[1] || '';
+                    fn = arguments[2];
+
+                    has_val = true;
+                }
+            }
+
+
+            if (has_val && fn) {
                 instance.sub.list.push({
                     'path': path,
                     'fn': fn,
@@ -919,9 +990,21 @@
                     this.queue.push(ani);
                     if(!this.is_animating){
                         raf(this.tick);
+                        this.is_animating = true;
                     }
+                }              
+            }
+            else if (args_typeof == 'function') {
+                var ani = {
+                    'from': 0, 'to': 0, 'fn': args,
+                    'duration': 0, 'namespace': '', 
+                    'start_time': new Date().getTime()
+                };
+                this.queue.push(ani);
+                if(!this.is_animating){
+                    raf(this.tick);
+                    this.is_animating = true;
                 }
-                
             }
         }
         anip.tick = function(){

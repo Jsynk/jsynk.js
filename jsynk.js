@@ -191,6 +191,7 @@
                 var par_index = args.par_index;
                 var p_ref_and_ignore = args.p_ref_and_ignore || /^p_ref_and_ignore$/;
                 var p_ignore = args.p_ignore || /^p_ignore$/;
+                var level = args.level || 0;
                 var val_js_type = jk.typeof(val);
                 var reference = false;
                 var ignore = false;
@@ -220,7 +221,8 @@
                                     'parent': parent[par_index],
                                     'par_index': i,
                                     'p_ref_and_ignore': p_ref_and_ignore,
-                                    'p_ignore': p_ignore
+                                    'p_ignore': p_ignore,
+                                    'level': level + 1
                                 });
                             }
                             break;
@@ -234,7 +236,8 @@
                                     'parent': parent[par_index],
                                     'par_index': i,
                                     'p_ref_and_ignore': p_ref_and_ignore,
-                                    'p_ignore': p_ignore
+                                    'p_ignore': p_ignore,
+                                    'level': level + 1
                                 });
                             }
                             break;
@@ -352,7 +355,7 @@
                 if (rev_id_changes) {
                     var rev_indexes = rev_id_changes.indexes;
                     if (rev_indexes) {
-                        if (rev_indexes[path]) {
+                        if (rev_indexes.hasOwnProperty(path)) {
                             ret_val = rev_indexes[path];
                         }
                     }
@@ -1061,7 +1064,6 @@
                 if (remove) { queue.splice(i, 1); }
             }
         }
-        // swing = Math.sin((Math.PI/2)*progress_precent)
 
 
 
@@ -1086,17 +1088,22 @@
                 case val_typeof == 'object':
                     jss_parts.push('{');
                     if (options.recursive !== false) {
+                        var loop_index = 0;
                         for (var i in val) {
+                            if (loop_index != 0) {
+                                jss_parts.push(',');
+                            }
                             var v = val[i];
                             if (options.beautify) {
                                 jss_parts.push('\n');
                             }
-                            jss_parts.push('"' + i + '":');
+                            jss_parts.push('"' + i.replace(/"/g,'\\"') + '":');
                             this.stringify_recursive({
                                 'val': v,
                                 'jss_parts': jss_parts,
                                 'options': options
                             }, level + 1);
+                            loop_index++;
                         }
                     }
                     jss_parts.push('}');
@@ -1141,11 +1148,13 @@
         // IMPORTANT TODO - make secure remove support for self executing functions
         // Should never be used on client
         jkp.parse = function(ref, options) {
-            return eval(ref);
+            var ret_val;
+            eval('ret_val = ' + ref)
+            return ret_val;
         }
         // jkp.parse_recursive = function(args, level) {}
         
-        
+        // arg fn parse does not work async, add support?
         function jMarkup(args) {}
         var jmp = jMarkup.prototype;
         jkp.jMarkup = jMarkup;
@@ -1153,52 +1162,24 @@
         jmp.parse = function(args){
             var markups = [];
             var cur_val = args.cur_val;
-            this.parse_recursive({'markups': markups, 'cur_val': cur_val});
-            var markup_strings = [];
-            this.stringify_recursive({'markups': markups, 'markup_strings': markup_strings});
-            var markup = markup_strings.join('');
+            var ms = [];
+            var mstrs = [];
+            this.parse_recursive({'markups': ms, 'mstrs': mstrs, 'cur_val': cur_val, 'fn': args.fn }); 
+            var markup = mstrs.join('');
             return markup;
-        }
-        jmp.stringify_recursive = function(args){
-            var mstrs = args.markup_strings;
-            var ms = args.markups;
-            for (var i = 0; i < ms.length; i++) {
-                var m = ms[i];
-                mstrs.push('<'+m.tag); // start tag
-                var attr_strs = []; // tag attrs
-                for (var attr_i in m.attrs) {
-                    var attr = m.attrs[attr_i];
-                    if (attr) {
-                        attr_strs.push(attr_i+'="'+attr+'"');
-                    }
-                    else {
-                        attr_strs.push(attr_i);
-                    }
-                }
-                if (attr_strs.length) { mstrs.push(' '); mstrs.push(attr_strs.join(' ')); }
-                mstrs.push('>');// start tag end
-
-                if (m.inner.length) { mstrs.push(m.inner.join(' ')); } // innerhtml
-
-                if (m.children.length) { // recursive child tags
-                    this.stringify_recursive({'markups': m.children, 'markup_strings': mstrs});
-                }
-
-                if (m.options.closed !== 1) {
-                    mstrs.push('</'+m.tag+'>');
-                };
-            }
         }
         jmp.parse_recursive = function(args){
             var markups = args.markups;
+            var mstrs = args.mstrs;
             var parent = args.parent;
+            var fn = args.fn;
             var cur_val = args.cur_val;
             var typeof_cur_val = jk.typeof(cur_val);
             if (/array/.test(typeof_cur_val)) {
                 for (var i = 0; i < cur_val.length; i++) {
                     var v = cur_val[i];
                     this.parse_recursive({
-                        'markups': markups, 'cur_val': v, 'parent': parent
+                        'markups': markups, 'mstrs': mstrs, 'cur_val': v, 'parent': parent, 'fn': fn
                     });
                 }
             }
@@ -1209,23 +1190,9 @@
                 if (lt_typeof == 'string') {
                     var markup = {'tag':lt_val,'attrs':{},'inner':[],'options':{},'children':[]};
                     markups.push(markup);
+                    mstrs.push('<'+lt_val);
                 }
                 if (markup) {
-                    var gt_val = cur_val['>'];
-                    var gt_typeof = jk.typeof(gt_val);
-                    if (gt_typeof == 'array') {
-                        for (var i = 0; i < gt_val.length; i++) {
-                            var v = gt_val[i];
-                            this.parse_recursive({
-                                'markups': markup.children, 'cur_val': v, 'parent': markups
-                            });
-                        }
-                    }
-                    else if (gt_val === '') { markup.options['closed'] = 1; }
-                    else if (gt_typeof == 'string') {
-                        markup.inner.push(gt_val);
-                    }
-
                     var attrs_val = cur_val['a'];
                     var attrs_typeof = jk.typeof(attrs_val);
                     if (attrs_typeof == 'array') {
@@ -1239,8 +1206,44 @@
                             }
                         }
                     }
+                    var attr_strs = []; // tag attrs
+                    for (var attr_i in markup.attrs) {
+                        var attr_val = {'type':'attr', 'attr':attr_i, 'val':markup.attrs[attr_i]}
+                        if (fn) {
+                            fn(attr_val);
+                        }
+                        if (attr_val.val) {
+                            attr_strs.push(attr_val.attr+'="'+attr_val.val+'"');
+                        }
+                        else {
+                            attr_strs.push(attr_val.attr);
+                        }
+                    }
+                    if (attr_strs.length) { mstrs.push(' '); mstrs.push(attr_strs.join(' ')); }
+                    mstrs.push('>');// start tag end
+
+                    var gt_val = cur_val['>'];
+                    var gt_typeof = jk.typeof(gt_val);
+
+                    if (gt_typeof == 'string') {
+                        markup.inner.push(gt_val);
+                    }
+
+                    if (markup.inner.length) { mstrs.push(markup.inner.join(' ')); } // innerhtml
+                    
+                    if (gt_typeof == 'array') {
+                        for (var i = 0; i < gt_val.length; i++) {
+                            var v = gt_val[i];
+                            this.parse_recursive({
+                                'markups': markup.children, 'mstrs': mstrs, 'cur_val': v, 'parent': markups, 'fn': fn
+                            });
+                        }
+                    }
+                    else if (gt_val === '') { markup.options['closed'] = 1; }
+                    if (markup.options.closed !== 1) {
+                        mstrs.push('</'+markup.tag+'>');
+                    }
                 }
-                
             }
         }
 
@@ -1323,7 +1326,6 @@
                 }
             }
         }
-        
 
 
         jkp.diff = function( old_str, new_str, options ) {
@@ -1405,6 +1407,24 @@
         jkp.diff_lines = function( o, n ) { return this.diff(o, n, {'splitter':'\n'} ); }
         jkp.diff_words = function( o, n ) { return this.diff(o, n, {'splitter':/\s+/} ); }
         jkp.diff_chars = function( o, n ) { return this.diff(o, n, {'splitter':''} ); }
+
+
+
+        function Async(args){
+            this.queue = [];
+        }
+        var asp = Async.prototype;
+        jkp.Async = Async;
+        
+        asp.wait = function(args){
+            this.queue.push(args);
+            return args.id;            
+        };
+        asp.next = function(){};
+        asp.recursive = function(args){};
+        asp.pararell = function(){};
+
+
         
         return jk;
     })();

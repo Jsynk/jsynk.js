@@ -853,7 +853,8 @@
         jkp.Agent = Agent;
 
         ap.default_options = {
-            'catch_error': true
+            'catch_error': true,
+            'capture_performance': true,
         }
         ap.get_option = function(prop){
             return jk.get_option([this._instance.options,this.default_options], prop);
@@ -876,6 +877,10 @@
         }
         ap.run_missions = function(){
             this._instance.current = -1;
+            var on_start = this.get_option('on_start');
+            if (typeof on_start == 'function') {
+                on_start.call(this);
+            }
             // console.log('---- Missions started ----');
             this.next();
         }
@@ -883,6 +888,10 @@
             var instance = this._instance;
 
             if (instance.current > -1) {
+                var on_mission_finish = this.get_option('on_mission_finish');
+                if (typeof on_mission_finish == 'function') {
+                    on_mission_finish.call(this);
+                }
                 // console.log('Mission ' + (instance.current+1) +' - finished after ' + (new Date().getTime()-instance.last_mission_time) + 'ms');
             }
 
@@ -905,6 +914,10 @@
                     }
                      catch(e){
                         var mission_name = jk.pathval([cur_mission,'name']) || (instance.current+1);
+                        var on_mission_fail = this.get_option('on_mission_fail');
+                        if (typeof on_mission_fail == 'function') {
+                            on_mission_fail.call(this);
+                        }
                         console.log('Mission ' + mission_name +' - failed after ' + (new Date().getTime()-instance.last_mission_time) + 'ms');
                         console.log(e);
                     }
@@ -922,9 +935,17 @@
                 }
             }
             else if (instance.missions.length == 0) {
+                var on_missing_missions = this.get_option('on_missing_missions');
+                if (typeof on_missing_missions == 'function') {
+                    on_missing_missions.call(this);
+                }
                 // console.log('- no missions added to run -');
             }
             else {
+                var on_complete = this.get_option('on_complete');
+                if (typeof on_complete == 'function') {
+                    on_complete.call(this);
+                }
                 // console.log('---- Missions finished ----');
             }
         }
@@ -993,7 +1014,7 @@
                     this.queue.push(ani);
                     if(!this.is_animating){
                         raf(this.tick);
-                        this.is_animating = true;
+                        // this.is_animating = true; // <-- ?!?
                     }
                 }              
             }
@@ -1006,7 +1027,7 @@
                 this.queue.push(ani);
                 if(!this.is_animating){
                     raf(this.tick);
-                    this.is_animating = true;
+                    // this.is_animating = true;
                 }
             }
         }

@@ -452,6 +452,11 @@
                     'length': 0
                 };
 
+                var min_diffs = jk.pathval([instance,'args','min_diffs']);
+                if (min_diffs) {
+                    cur_changes_indexes['path_str_indexes'] = {};
+                }
+
                 var get_diffs = path == '' ? true : cur_val != undefined ? true : false;
                 if (!get_diffs && path) {
                     var cur_path_parent = paths.slice(0, -1).join('.');
@@ -528,14 +533,27 @@
                         prev_branches.to[rev_guid] = true;
                     }
 
+                    var prev_rev = rev.current;
+
                     var rev_change = {
                         'diffs': cur_changes_indexes,
                         'indexes': cur_indexes,
                         'branches': cur_branches,
                         'date': new Date().getTime()
-                    };
+                    };                 
                     changes[rev_guid] = rev_change;
                     rev.current = rev_guid;
+
+                    if (min_diffs) {
+                        var vals = this.get({'path':'',history:1});
+                        var cur_rootval_str = jk.stringify(vals[0]);
+                        var min_diff = {
+                            head: cur_rootval_str,
+                            diffs: jk.diff_chars(jk.stringify(vals[1]), cur_rootval_str)
+                        }
+                        rev_change['min_diffs'] = min_diff;
+                        // console.log(min_diff.diffs);
+                    }
 
                     // keep desired history
                     if (rev.max_history >= 0) {
@@ -636,13 +654,19 @@
             var ignore = args.ignore || instance.ignore || /^p_ignore$/;
             var ignore_js_type = jk.typeof(ignore);
 
-            if (indexes[path] == undefined) {
+            if (!indexes.hasOwnProperty(path)) {
                 indexes[path] = t;
                 if (!jk.is_same(f, t)) {
                     if (change_indexes) {
                         change_indexes.paths.push(path);
                         change_indexes.path_indexes[path] = true;
                         change_indexes.length++;
+                        if (change_indexes.path_str_indexes) {
+                            change_indexes.path_str_indexes[path] = {
+                                same:jk.stringify(t),
+                                recursive:jk.stringify(t,{recursive:false})
+                            };
+                        }
                     }
                 }
             }
@@ -693,6 +717,12 @@
                         change_indexes.paths.push(path);
                         change_indexes.path_indexes[path] = true;
                         change_indexes.length++;
+                        if (change_indexes.path_str_indexes) {
+                            change_indexes.path_str_indexes[path] = {
+                                same:jk.stringify(t,{recursive:false}),
+                                recursive:jk.stringify(t),
+                            };
+                        }
                     }
                 }
             }
@@ -1349,78 +1379,132 @@
         }
 
 
-        jkp.diff = function( old_str, new_str, options ) {
+        jkp.diff = function( old_str, new_str, options) {
             var options = jk.typeof(options) == 'object' ? options : {};
-            var splitter = options.splitter != undefined ? options.splitter : '\n';
+            var splitter = options.splitter != undefined ? options.splitter : '';
 
-            var o = old_str == "" ? [] : old_str.split(splitter);
-            var n = new_str == "" ? [] : new_str.split(splitter);
+            var os = old_str == "" ? [] : old_str.split(splitter);
+            var ns = new_str == "" ? [] : new_str.split(splitter);
 
-            var ns = {};
-            var os = {};
-            
-            for (var i = 0; i < n.length; i++) {
-                if ( ns[ n[i] ] == undefined ) { ns[ n[i] ] = { rows: [] }; }
-                ns[ n[i] ].rows.push( i );
-            }
-            for (var i = 0; i < o.length; i++) {
-                if ( os[ o[i] ] == undefined ) { os[ o[i] ] = { rows: [] }; }
-                os[ o[i] ].rows.push( i );
-            }
-            for (var i in ns) {
-                if (ns[i].rows.length == 1 && typeof(os[i]) != "undefined" && os[i].rows.length == 1) {
-                    n[ ns[i].rows[0] ] = { text: n[ ns[i].rows[0] ], row: os[i].rows[0] };
-                    o[ os[i].rows[0] ] = { text: o[ os[i].rows[0] ], row: ns[i].rows[0] };
-                }
-            }
-            for (var i = 0; i < n.length - 1; i++) {
-                if (n[i].text != null && n[i+1].text == null && n[i].row + 1 < o.length 
-                    && o[ n[i].row + 1 ].text == null && n[i+1] == o[ n[i].row + 1 ]) {
-                    n[i+1] = { text: n[i+1], row: n[i].row + 1 };
-                    o[n[i].row+1] = { text: o[n[i].row+1], row: i + 1 };
-                }
-            }
-            for (var i = n.length - 1; i > 0; i--) {
-                if (n[i].text != null && n[i-1].text == null && n[i].row > 0 
-                    && o[ n[i].row - 1 ].text == null && n[i-1] == o[ n[i].row - 1 ]) {
-                    n[i-1] = { text: n[i-1], row: n[i].row - 1 };
-                    o[n[i].row-1] = { text: o[n[i].row-1], row: i - 1 };
-                }
-            }
-
-            var changes = [];
-            var prev_change_type;
-
-            function add_change(cur_change) {
-                if (prev_change_type === cur_change.t) {
-                    changes[changes.length-1].v += cur_change.v;
-                }
-                else {
-                    changes.push(cur_change);
-                }
-                prev_change_type = cur_change.t;
-            }
-            
-            if (n.length == 0) {
-                for (var i = 0; i < o.length; i++) {
-                    add_change({'t':'del','v': o[i]});
-                }
-            } else {
-                if (n[0].text == null) {
-                    for (j = 0; j < o.length && o[j].text == null; j++) {
-                        add_change({'t':'del','v': o[j]});
+            var diff_list = [];
+            var oi = [];
+            var ni = [];
+            for (var i = 0; i < os.length; i++) {
+                oi.push(false);
+                var o = os[i];
+                var diff = { 
+                    oi: i, 'match':{ni:0,'len':0}, 'mismatch':{ni:0,'len':0}
+                };
+                diff_list.push(diff);
+                // handle multiple diff?
+                for (var j = 0; j < ns.length; j++) {
+                    if (i == 0) { ni.push(false); }
+                    var n = ns[j];
+                    var ni_diff = j - diff.match.ni;
+                    var on_val = os[diff.oi+ni_diff];
+                    if (on_val == n && diff.mismatch.len == 0) {
+                        diff.match.len++;
+                    }
+                    else if (o == n) {
+                        var diff = { 
+                            oi: i, 'match':{ni:j,'len':1}, 'mismatch':{ni:0,'len':0}
+                        };
+                        diff_list.push(diff);
+                    }
+                    else {
+                        diff.mismatch.len++;
                     }
                 }
-                for ( var i = 0; i < n.length; i++ ) {
-                    if (n[i].text == null) {
-                        add_change({'t':'add','v': n[i]});
-                    } else {
-                        add_change({'t':'same','v': n[i].text});
-                        for (var j = n[i].row + 1; j < o.length && o[j].text == null; j++ ) {
-                            add_change({'t':'del','v': o[j]});
+            }
+            // diff_list.sort(function(a,b){
+            //     switch(true){
+            //         case a.match.ni > b.match.ni: return 1;
+            //         case a.match.ni < b.match.ni: return -1;
+            //         case a.match.len > b.match.len: return -1;
+            //         case a.match.len < b.match.len: return 1;
+            //     }
+            //     return 0;
+            // });
+            
+            var last_oi = 0;
+            var last_ni = 0;
+            var changes = [];
+            for(var i in diff_list){
+                var d = diff_list[i];
+                var om = 0;
+                var nm = 0;
+
+                if (i != 0) {
+                    for (var j = d.oi; j < d.oi + d.match.len; j++) {
+                        if (oi[j] == true) {
+                            om++;
+                            break;
+                        }
+                    }
+                    if (om == 0) {
+                        for (var j = d.match.ni; j < d.match.ni + d.match.len; j++) {
+                            if (ni[j] == true) {
+                                nm++;
+                                break;
+                            }
                         }
                     }
                 }
+                
+
+                if (om == 0 && nm == 0 && d.match.len != 0) {
+                    // append removed string
+                    if (last_oi < d.oi && oi[last_oi] == false) {
+                        var change = '<';
+                        for (var j = last_oi; j < d.oi; j++) {
+                            change += os[j];
+                        }
+                        changes.push(change);
+                        last_oi = d.oi;
+                    }
+                    // append added string
+                    if (last_ni < d.match.ni && ni[last_ni] == false) {
+                        var change = '>';
+                        for (var j = last_ni; j < d.match.ni; j++) {
+                            change += ns[j];
+                        }
+                        changes.push(change);
+                        last_ni = d.match.ni;
+                    }
+
+                    // append unchanged string
+                    var change = '^';
+                    var oi_end = d.oi + d.match.len;
+                    for (var j = d.oi; j < oi_end; j++) {
+                        oi[j] = true;
+                        change += os[j];
+                    }
+                    changes.push(change);
+                    last_oi = oi_end;
+                    var ni_end = d.match.ni + d.match.len;
+                    for (var j = d.match.ni; j < ni_end; j++) {
+                        ni[j] = true;
+                    }
+                    last_ni = ni_end;
+                }
+            }
+            // append removed string
+            if (last_oi < os.length && oi[last_oi] == false) {
+                var change = '<';
+                for (var j = last_oi; j < os.length; j++) {
+                    change += os[j];
+                }
+                changes.push(change);
+                last_oi = os.length;
+            }
+            // append added string
+            if (last_ni < ns.length && ni[last_ni] == false) {
+                var change = '>';
+                for (var j = last_ni; j < ns.length; j++) {
+                    change += ns[j];
+                }
+                changes.push(change);
+                last_ni = ns.length;
             }
 
             return changes;

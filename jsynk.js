@@ -306,6 +306,19 @@
             }
             return ret_val;
         }
+        jkp.get_arguments = function(args){
+            var ret_val = [];
+            for(var i in args){
+                var a = args[i];
+                if(a !== undefined) {
+                    ret_val.push(a);
+                }
+                else {
+                    break;
+                }
+            }
+            return ret_val;
+        }
 
         function jSub(args) {
             var args = args || {};
@@ -396,27 +409,28 @@
             
             return ret_val;
         }
-        jsp.set = function(args) {
+        jsp.set = function(a0, a1) {
+            var a = jk.get_arguments([a0, a1]);
             var has_val = false;
             var value, path, paths, instance, ignore;
 
-            var typeofs = jk.get_typeofs(arguments);
+            var typeofs = jk.get_typeofs(a);
 
-            if (arguments.length == 1) {
+            if (a.length == 1) {
                 if (typeofs[0] == 'object') {
-                    value = args.value;
-                    path = args.path || '';
+                    value = a0.value;
+                    path = a0.path || '';
                     paths = [''];
-                    instance = args.instance || this._instance;
-                    ignore = args.ignore || instance.ignore || /^p_ignore$/;
+                    instance = a0.instance || this._instance;
+                    ignore = a0.ignore || instance.ignore || /^p_ignore$/;
 
                     has_val = true;
                 }
             }
-            else if (arguments.length == 2) {
+            else if (a.length == 2) {
                 if (typeofs[0] == 'string') {
-                    value = arguments[1];
-                    path = arguments[0] || '';
+                    value = a[1];
+                    path = a[0] || '';
                     paths = [''];
                     instance = this._instance;
                     ignore = instance.ignore || /^p_ignore$/;
@@ -759,49 +773,50 @@
             }
         }
         // Add options on what args return
-        jsp.on = function(args) {
+        jsp.on = function(a0, a1, a2, a3) {
+            var a = jk.get_arguments([a0, a1, a2, a3]);
             var has_val = false;
             var path, instance, namespace, fn, fn_args, once;
 
-            var typeofs = jk.get_typeofs(arguments);
+            var typeofs = jk.get_typeofs(a);
 
-            if (arguments.length == 1) {
+            if (a.length == 1) {
                 if (typeofs[0] == 'object') {
-                    path = args.path || '';
-                    instance = args.instance || this._instance;
-                    namespace = args.namespace || '';
-                    fn = args.fn;
-                    fn_args = args.fn_args;
-                    once = args.once;
+                    path = a0.path || '';
+                    instance = a0.instance || this._instance;
+                    namespace = a0.namespace || '';
+                    fn = a0.fn;
+                    fn_args = a0.fn_args;
+                    once = a0.once;
 
                     has_val = true;
                 }
             }
-            else if (arguments.length == 2) {
+            else if (a.length == 2) {
                 if ((typeofs[0] == 'regexp' || typeofs[0] == 'string') && typeofs[1] == 'function') {
-                    path = arguments[0] || '';
+                    path = a[0] || '';
                     instance = this._instance;
                     namespace = '';
-                    fn = arguments[1];
+                    fn = a[1];
 
                     has_val = true;
                 }
             }
-            else if (arguments.length == 3) {
+            else if (a.length == 3) {
                 if ((typeofs[0] == 'regexp' || typeofs[0] == 'string') && typeofs[1] == 'boolean' && typeofs[2] == 'function') {
-                    path = arguments[0] || '';
+                    path = a[0] || '';
                     instance = this._instance;
                     namespace = '';
-                    fn = arguments[2];
-                    once = arguments[1];
+                    fn = a[2];
+                    once = a[1];
 
                     has_val = true;
                 }
                 else if ((typeofs[0] == 'regexp' || typeofs[0] == 'string') && typeofs[1] == 'string' && typeofs[2] == 'function') {
-                    path = arguments[0] || '';
+                    path = a[0] || '';
                     instance = this._instance;
-                    namespace = arguments[1] || '';
-                    fn = arguments[2];
+                    namespace = a[1] || '';
+                    fn = a[2];
 
                     has_val = true;
                 }
@@ -1382,6 +1397,7 @@
         jkp.diff = function( old_str, new_str, options) {
             var options = jk.typeof(options) == 'object' ? options : {};
             var splitter = options.splitter != undefined ? options.splitter : '';
+            var ret_type = options.ret_type || 'normal'; // transform
 
             var os = old_str == "" ? [] : old_str.split(splitter);
             var ns = new_str == "" ? [] : new_str.split(splitter);
@@ -1457,7 +1473,10 @@
                     if (last_oi < d.oi && oi[last_oi] == false) {
                         var change = '<';
                         for (var j = last_oi; j < d.oi; j++) {
-                            change += os[j];
+                            if (oi[j] == false) {
+                                oi[j] = true;
+                                change += os[j];
+                            }
                         }
                         changes.push(change);
                         last_oi = d.oi;
@@ -1466,12 +1485,15 @@
                     if (last_ni < d.match.ni && ni[last_ni] == false) {
                         var change = '>';
                         for (var j = last_ni; j < d.match.ni; j++) {
-                            change += ns[j];
+                            if (ni[j] == false) {
+                                change += ns[j];
+                                ni[j] = true;
+                            }
                         }
                         changes.push(change);
                         last_ni = d.match.ni;
                     }
-
+                    
                     // append unchanged string
                     var change = '^';
                     var oi_end = d.oi + d.match.len;
@@ -1506,29 +1528,90 @@
                 changes.push(change);
                 last_ni = ns.length;
             }
+            
+            var ret_val = changes;
+            if(ret_type == 'transform') {
+                var cur_index = 0;
+                var transforms = [];
+                for (var i = 0; i < changes.length; i++){
+                    var c = changes[i];
+                    var ctype = c.slice(0,1);
+                    if (ctype != '^'){
+                        transforms.push(c);
+                    }
+                    else {
+                        transforms.push(c.length - 1);
+                    }
+                }
+                ret_val = transforms;
+            }
 
-            return changes;
+            return ret_val;
         }
         jkp.diff_lines = function( o, n ) { return this.diff(o, n, {'splitter':'\n'} ); }
         jkp.diff_words = function( o, n ) { return this.diff(o, n, {'splitter':/\s+/} ); }
         jkp.diff_chars = function( o, n ) { return this.diff(o, n, {'splitter':''} ); }
+        jkp.diff_transform = function(args) {
+            var args = args || {};
+            var head = args.head;
+            var type = args.type;
+            var diffs = args.diffs;
+            var ret_val;
+            if(head && diffs){
+                var transform = head;
+                var i_offset = 0;                
+                for (var i = 0; i < diffs.length; i++) {
+                    var d = diffs[i];
+                    if (typeof d == 'string'){
+                        var d_type = d.slice(0,1);
+                        var d_val = d.slice(1);
+                        var val_len = d_val.length;
+                        if( ( type == 'next' && d_type == '<' ) || ( type != 'next' && d_type == '>' ) ) {
+                            transform = transform.slice(0, i_offset) + transform.slice(i_offset + val_len);
+                        }
+                        else {
+                            transform = transform.slice(0, i_offset) + d_val + transform.slice(i_offset);
+                            i_offset += val_len;
+                        }
+                    }
+                    else if (typeof d == 'number'){
+                        i_offset += d;
+                    }
+                }
 
-
-
-        function Async(args){
-            this.queue = [];
+                ret_val = transform;
+            }
+            return ret_val;
         }
+
+
+        function Async(args){}
         var asp = Async.prototype;
         jkp.Async = Async;
         
-        asp.wait = function(args){
-            this.queue.push(args);
-            return args.id;            
+        asp.recursive = function(args){
+            var complete = args.complete;
+            var call = {
+                checks: 0,
+                wait: function(){ call.checks++; },
+                done: function(){
+                    if (call.checks != 0){
+                        call.checks--; call.check(); 
+                    }
+                },
+                check: function(){
+                    if (call.checks == 0) {
+                        complete();
+                    }
+                }
+            }
+            return call;
         };
-        asp.next = function(){};
-        asp.recursive = function(args){};
         asp.pararell = function(){};
 
+
+        function Layout(args){}
+        Layout.prototype = {}
 
         
         return jk;

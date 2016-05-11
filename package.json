@@ -1,0 +1,32 @@
+{
+  "name": "jsynk",
+  "version": "1.0.0",
+  "description": "A lib with many small frameworks such as tools for javascript varibles to pub/sub changes, parse to html, parse to css, convert to string including functions and regex, testing, animating, diffing and some other utilities.",
+  "main": "jsynk.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jsynk/jsynk.js.git"
+  },
+  "keywords": [
+    "lib",
+    "framework",
+    "publish",
+    "subscribe",
+    "html",
+    "css",
+    "diff",
+    "events",
+    "test",
+    "animate",
+    "stringify"
+  ],
+  "author": "Jorge Andrés Guerra Guerra <jsynkk@gmail.com> (jsynk.com)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Jsynk/jsynk.js/issues"
+  },
+  "homepage": "https://github.com/Jsynk/jsynk.js#readme"
+}

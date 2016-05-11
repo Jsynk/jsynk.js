@@ -850,19 +850,25 @@
                 if (remove) { instance_sub_list.splice(i, 1); }
             }
         }
-        jsp.on_before_set = function(args) {
-            var args = args || {};
-            var path = args.path || '';
-            var instance = args.instance || this._instance;
-            var namespace = args.namespace || '';
-            var fn = args.fn;
+        // jsp.on_before_set = function(args) {}
+        // jsp.off_before_set = function(args) {}
 
-            if (fn) {
-                // instance.sub.rules.push({'path':path,'fn':fn, 'namespace': namespace});
-                // todo index subs for unsubbing index[path] = {all:{subcribers_index},'namespace':[]}
+        jsp.debug = function(args){
+            var ns = 'internal_jSub_debugger';
+            this.off(ns);
+            if (args){
+                this.on({path:/^.*$/gm, namespace:ns, fn: function(e){
+                    var val = jk.stringify(this.get(e.paths[0]), {recursive:false});
+                    var log = [e.paths[0], val].join(' : ');
+                    console.log(jk.stringify(log));
+                    if(args === log){
+                        // Step through stack trace 
+                        // to locate where this value is set
+                        debugger;
+                    }
+                }});
             }
-        }
-        jsp.off_before_set = function(args) {}
+        }        
 
         jsp.mirror = function(args){
             var cur_inst = this;
@@ -871,7 +877,7 @@
             var path = args.path || '';
             var from_path = args.from_path || '';
             // copy from whom ? inst always?
-            cur_inst.set({'path':path,'value':inst.get()});
+            cur_inst.set({'path':path,'value':inst.get(from_path)});
 
             var i_regex = new RegExp(from_path+'.*','gm');
             inst.on({'path':i_regex,'once':true,'fn':function(e){
@@ -883,7 +889,7 @@
                 inst.set({'path':from_path,'value':cur_inst.get({'path':path})});
             }});
         }
-
+        
 
 
         function Agent(options){
@@ -1610,7 +1616,11 @@
         asp.pararell = function(){};
 
 
-        function Layout(args){}
+        function Layout(args){
+            this._instance = {
+                sub: new jk.jSub()
+            }
+        }
         Layout.prototype = {}
 
         

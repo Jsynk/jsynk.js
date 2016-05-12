@@ -860,7 +860,7 @@
                 this.on({path:/^.*$/gm, namespace:ns, fn: function(e){
                     var val = jk.stringify(this.get(e.paths[0]), {recursive:false});
                     var log = [e.paths[0], val].join(' : ');
-                    console.log(jk.stringify(log));
+                    console.log(["'",log,"'"].join(''));
                     if(args === log){
                         // Step through stack trace 
                         // to locate where this value is set
@@ -868,7 +868,7 @@
                     }
                 }});
             }
-        }        
+        }
 
         jsp.mirror = function(args){
             var cur_inst = this;
@@ -879,16 +879,22 @@
             // copy from whom ? inst always?
             cur_inst.set({'path':path,'value':inst.get(from_path)});
 
+            var guid = jk.guid();
+
             var i_regex = new RegExp(from_path+'.*','gm');
-            inst.on({'path':i_regex,'once':true,'fn':function(e){
+            inst.on({'path':i_regex,'once':true,'namespace':guid,'fn':function(e){
                 cur_inst.set({'path':path,'value':inst.get({'path':from_path})});
             }});
 
             var ci_regex = new RegExp(path+'.*','gm');
-            cur_inst.on({'path':ci_regex,'once': true, 'fn': function(e){
+            cur_inst.on({'path':ci_regex,'once': true,'namespace': guid,'fn': function(e){
                 inst.set({'path':from_path,'value':cur_inst.get({'path':path})});
             }});
+            
+            return guid;
         }
+        // mirror off ?
+        // proper remove ?
         
 
 
@@ -1221,7 +1227,7 @@
         // Should never be used on client
         jkp.parse = function(ref, options) {
             var ret_val;
-            eval('ret_val = ' + ref)
+            eval('ret_val = ' + ref);
             return ret_val;
         }
         // jkp.parse_recursive = function(args, level) {}

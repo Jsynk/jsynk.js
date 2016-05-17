@@ -4,7 +4,7 @@
     if (typeof exports === 'object' && exports !== null) {
         module.exports = factory();
     } else if (typeof define === 'function' && define.amd) {
-        define([], factory);
+        define('jsynk', [], factory);
     } else {
         root.jk = factory();
     }
@@ -879,22 +879,20 @@
             // copy from whom ? inst always?
             cur_inst.set({'path':path,'value':inst.get(from_path)});
 
-            var guid = jk.guid();
+            var ns = args.namespace || jk.guid();
 
-            var i_regex = new RegExp(from_path+'.*','gm');
-            inst.on({'path':i_regex,'once':true,'namespace':guid,'fn':function(e){
+            var i_regex = new RegExp('^'+from_path+'.*$','gm');
+            inst.on({'path':i_regex,'once':true,'namespace':ns,'fn':function(e){
                 cur_inst.set({'path':path,'value':inst.get({'path':from_path})});
             }});
 
-            var ci_regex = new RegExp(path+'.*','gm');
-            cur_inst.on({'path':ci_regex,'once': true,'namespace': guid,'fn': function(e){
+            var ci_regex = new RegExp('^'+path+'.*$','gm');
+            cur_inst.on({'path':ci_regex,'once': true,'namespace': ns,'fn': function(e){
                 inst.set({'path':from_path,'value':cur_inst.get({'path':path})});
             }});
             
-            return guid;
+            return ns;
         }
-        // mirror off ?
-        // proper remove ?
         
 
 
@@ -1009,7 +1007,9 @@
 
         
         // package? run scripts on change? guids as uid? use jSub?
-        function Depender(args){}
+        function Depender(args){
+            var sub = this.sub = new jk.jSub();
+        }
         var dp = Depender.prototype;
         jkp.Depender = Depender;
         

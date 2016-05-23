@@ -1225,6 +1225,7 @@
         // jkp.validate = function(ref, options){}
         // jkp.validate_recursive = function(args, level) {}
 
+
         // IMPORTANT TODO - make secure remove support for self executing functions
         // Should never be used on client
         jkp.parse = function(ref, options) {

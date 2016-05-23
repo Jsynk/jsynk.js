@@ -242,13 +242,13 @@
                             }
                             break;
                         case 'function':
-                            eval('parent[par_index] = ' + val.toString());
+                            parent[par_index] = jk.parse(val.toString());
                             break;
                         case 'date':
                             parent[par_index] = new Date(val.getTime())
                             break;
                         case 'regexp':
-                            eval('parent[par_index] = ' + val.toString());
+                            parent[par_index] = jk.parse(val.toString());
                             break;
                         default:
                             parent[par_index] = val;
@@ -1006,7 +1006,9 @@
         }
 
         
-        // package? run scripts on change? guids as uid? use jSub?
+        // requirejs uses define fn to add a package and its dependencies
+        // and uses require fn to send a package with its dependencies in the arguments
+        // keep track of how many 
         function Depender(args){
             var sub = this.sub = new jk.jSub();
         }
@@ -1226,8 +1228,7 @@
         // IMPORTANT TODO - make secure remove support for self executing functions
         // Should never be used on client
         jkp.parse = function(ref, options) {
-            var ret_val;
-            eval('ret_val = ' + ref);
+            var ret_val = eval('(function(){ return ' + ref + '; })();');
             return ret_val;
         }
         // jkp.parse_recursive = function(args, level) {}

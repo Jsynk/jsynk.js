@@ -18,6 +18,7 @@
     "observer",
     "html",
     "css",
+    "parser",
     "diff",
     "events",
     "test",

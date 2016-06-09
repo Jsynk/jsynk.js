@@ -30,7 +30,7 @@ sub.set({path:'',value:{title:'welcome',list:['apple','orange']}});
 
 ## Installation
 
-Browser - [jsynk.js](https://github.com/jsynk/jsynk/jsynk.js)
+Browser - [jsynk.js](https://raw.githubusercontent.com/Jsynk/jsynk.js/master/jsynk.jss)
 ```html
 <script type="text/javascript" src="jsynk.js"></script>
 ```

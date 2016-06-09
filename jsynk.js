@@ -1006,11 +1006,11 @@
         }
 
         
-        // requirejs uses define fn to add a package and its dependencies
-        // and uses require fn to send a package with its dependencies in the arguments
-        // keep track of how many 
+        
         function Depender(args){
             var sub = this.sub = new jk.jSub();
+
+            return sub;
         }
         var dp = Depender.prototype;
         jkp.Depender = Depender;
@@ -1048,6 +1048,8 @@
             }
             return ret_val;
         })();
+        
+        jk.raf = raf;
         
         anip.queue = [];
         anip.is_animating = false;
@@ -1224,7 +1226,6 @@
         }
         // jkp.validate = function(ref, options){}
         // jkp.validate_recursive = function(args, level) {}
-
 
         // IMPORTANT TODO - make secure remove support for self executing functions
         // Should never be used on client

@@ -65,11 +65,13 @@
 
             // compress int and string
             cias: (function(){
-                var f = function(val) {
+                var f = function cias(val) {
                     if (this instanceof jk.cias){
                         // all printable ISO-8859-1
                         //  !"#$%&\'()*+,-._/0123456789:;=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^`abcdefghijklmnopqrstuvwxyz{<|>}~¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ
-                        var letters = val || '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                        // var letters = val || '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                        var letters = val || 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+                        // https://en.wikipedia.org/wiki/Base64t
                         this._instance = {
                             letters: letters
                         }
@@ -116,7 +118,7 @@
 
             //horizonal unique id - highres-timestamp
             huid: (function(){
-                var f = function(){
+                var f = function huid(){
                     var huid = '';
                     
                     var p = jk.huid.prototype;
@@ -193,7 +195,7 @@
 
                 return f;
             })(),
-            guid: function(parts) {
+            guid: function guid(parts) {
                 var parts = parts || 10;
                 var ret_val = '';
                 for (var i = 0; i < parts; i++) {
@@ -201,7 +203,7 @@
                 }
                 return ret_val;
             },
-            type: function(ref) {
+            type: function type(ref) {
                 if (ref === null){return "Null";}
                 else if (ref === undefined){return "Undefined";}
                 var funcNameRegex = /function (.{1,})\(/;
@@ -218,6 +220,14 @@
                         if (ref instanceof Array) { ret_val = 'array'; }
                         else if (ref instanceof RegExp) { ret_val = 'regexp'; }
                         else if (ref instanceof Date) { ret_val = 'date'; }
+                    }
+                }
+                if(ret_val == 'number'){
+                    if(isNaN(ref)){
+                        ret_val = 'nan';
+                    }
+                    else if(!isFinite(ref)){
+                        ret_val = 'infinity';
                     }
                 }
                 return ret_val;
@@ -685,7 +695,7 @@
                                     var cur_rootval_str = jk.stringify(vals[0]);
                                     var min_diff = {
                                         head: cur_rootval_str,
-                                        diffs: jk.diff_chars(jk.stringify(vals[1]), cur_rootval_str)
+                                        diffs: jk.diff(jk.stringify(vals[1]), cur_rootval_str, {ret_type:'transform'})
                                     }
                                     rev_change['min_diffs'] = min_diff;
                                     // console.log(min_diff.diffs);
@@ -998,8 +1008,15 @@
 
                         var path = args.path || '';
                         var from_path = args.from_path || '';
+                        var merge = args.merge || false;
                         // copy from whom ? inst always?
-                        cur_inst.set({'path':path,'value':inst.get(from_path)});
+                        if(merge){
+                            var val = jk.merge(cur_inst.get(path), inst.get(from_path));
+                            cur_inst.set({'path':path,'value':val});
+                        }
+                        else {
+                            cur_inst.set({'path':path,'value':inst.get(from_path)});
+                        }
 
                         var ns = args.namespace || jk.huid();
 
@@ -1129,6 +1146,8 @@
                 return Agent;
             })(),
 
+            // recursive removal off old dependencies!
+            // handle recursive circular reference ?
             Depender: (function(){
                 function Depender(args){
                     jk.jSub.call(this);
@@ -1489,6 +1508,52 @@
                     }
                 }
                 lip.constructors = constructors;
+            },
+            construct: function(obj){
+                var constructors = obj.__proto__.constructors;
+                if(constructors.__proto__ == Array.prototype){
+                    for(var i = 0; i < constructors.length; i++){
+                        var fn = constructors[i];
+                        fn.call(obj);
+                    }
+                }
+            },
+
+            // merge prop filter
+            merge: function(ref1, ref2, deep_copy){
+                var merge;
+                var ref1_typeof = jk.typeof(ref1);
+                var ref2_typeof = jk.typeof(ref2);
+
+                var r1_is_obj = ref1_typeof == 'object';
+                var r2_is_obj = ref2_typeof == 'object';
+
+                if(ref2 != null && ref1 == null){
+                    merge = ref2;
+                }
+                else if(ref1 != null && ref2 == null){
+                    merge = ref1;
+                }
+                else if (r1_is_obj && r2_is_obj) {
+                    var merge = {};
+                    for(var r2_i in ref2){
+                        var r2 = ref2[r2_i];
+                        if(ref2.hasOwnProperty(r2_i)){
+                            merge[r2_i] = r2;
+                        }
+                    }
+                    for(var r1_i in ref1){
+                        var r1 = ref1[r1_i];
+                        if(ref1.hasOwnProperty(r1_i) && !merge.hasOwnProperty(r1_i)){
+                            merge[r1_i] = r1;
+                        }
+                    }
+                }
+
+                if(deep_copy === true){
+                    merge = jk.deep_copy({val: merge});
+                }
+                return merge;
             },
 
             jMarkup: (function(){

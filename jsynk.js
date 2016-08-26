@@ -1268,7 +1268,6 @@
                                 if(!this.is_animating){
                                     this.id = jk.raf(this.tick);
                                 }
-                                this.is_animating = true;
                             }              
                         }
                         else if (args_typeof == 'function') {
@@ -1281,7 +1280,6 @@
                             if(!this.is_animating){
                                 this.id = jk.raf(this.tick);
                             }
-                            this.is_animating = true;
                         }
                     },
                     tick: function(timestamp){

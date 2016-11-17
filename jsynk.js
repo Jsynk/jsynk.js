@@ -18,23 +18,23 @@
             nodejs: typeof exports === 'object' && exports !== null !== null ? true : false,
         };
 
-        var raf, caf;
+        var req_ani_frame, can_ani_frame;
         (function() {          
             if(env['browser']){
-                raf = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame;
-                caf = window.cancelAnimationFrame || window.webkitCancelAnimationFrame || window.mozCancelAnimationFrame;
+                req_ani_frame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame;
+                can_ani_frame = window.cancelAnimationFrame || window.webkitCancelAnimationFrame || window.mozCancelAnimationFrame;
             }
-            if(!raf){
+            if(!req_ani_frame){
                 var timeLast = 0;
-                raf = function(callback) {
+                req_ani_frame = function(callback) {
                     var timeCurrent = (new Date()).getTime(), timeDelta;
                     timeDelta = Math.max(0, 16 - (timeCurrent - timeLast));
                     timeLast = timeCurrent + timeDelta; // return performance.now if supported?
                     return setTimeout(function() { callback(timeCurrent + timeDelta); }, timeDelta);
                 };
             }
-            if(!caf){
-                caf = function(rafid) {
+            if(!can_ani_frame){
+                can_ani_frame = function(rafid) {
                     clearTimeout(rafid);
                 };
             }
@@ -44,34 +44,37 @@
         jSynk.prototype = {
             this: this,
             prev_jk_ref: this.jk,
-            noConflict: function() {
+            noConflict: function noConflict() {
                 var cur_ref = jk;
                 jk = jk.prev_jk_ref;
                 return cur_ref;
             },
             env : env,
-            utf8_to_b64: function( str ) {
+            utf8_to_b64: function utf8_to_b64( str ) {
                 if (jk.env['browser']) {
                     return window.btoa(unescape(encodeURIComponent( str )));
                 }
+                else if (jk.env.nodejs){
+                    return (new Buffer(str)).toString('base64');
+                }
                 return str;
             },
-            b64_to_utf8: function( str ) {
+            b64_to_utf8: function b64_to_utf8( str ) {
                 if (jk.env['browser']) {
                     return decodeURIComponent(escape(window.atob( str )));
+                }
+                else if (jk.env.nodejs){
+                    return (new Buffer(str, 'base64')).toString('utf8');
                 }
                 return str;
             },
 
             // compress int and string
             cias: (function(){
-                var f = function cias(val) {
+                function cias(val) {
                     if (this instanceof jk.cias){
-                        // all printable ISO-8859-1
-                        //  !"#$%&\'()*+,-._/0123456789:;=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^`abcdefghijklmnopqrstuvwxyz{<|>}~¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ
-                        // var letters = val || '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-                        var letters = val || 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-                        // https://en.wikipedia.org/wiki/Base64t
+                        //ascii ' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~';
+                        var letters = val || '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
                         this._instance = {
                             letters: letters
                         }
@@ -80,7 +83,7 @@
                         return jk.cias.prototype.convert(val);
                     }
                 }
-                f.prototype = {
+                cias.prototype = {
                     convert: function(val){
                         if (jk.typeof(val) == 'number'){
                             var instance = this._instance;
@@ -113,12 +116,12 @@
                         }
                     }
                 };
-                return f;
+                return cias;
             })(),
 
             //horizonal unique id - highres-timestamp
             huid: (function(){
-                var f = function huid(){
+                function huid(){
                     var huid = '';
                     
                     var p = jk.huid.prototype;
@@ -130,7 +133,7 @@
                     return huid;
                 };
 
-                f.prototype = {
+                huid.prototype = {
                     start_time: (new Date()).getTime(),
                     start_time_str: '',
                     seperator: '_',                    
@@ -168,7 +171,7 @@
                             var elapsed_time = (new Date()).getTime() - this.start_time;
                             return [elapsed_time, process_hrtime[1]];
                         }
-                        f.prototype.get_cur_times = get_cur_times;
+                        huid.prototype.get_cur_times = get_cur_times;
                         overriden = true;
                     }
                     else {
@@ -188,12 +191,12 @@
                             var ret_val = [parseInt(splits[0]), parseInt(this.padding(str))];
                             return ret_val;
                         }
-                        f.prototype.get_cur_times = get_cur_times;
+                        huid.prototype.get_cur_times = get_cur_times;
                         overriden = true;
                     }
                 }
 
-                return f;
+                return huid;
             })(),
             guid: function guid(parts) {
                 var parts = parts || 10;
@@ -210,7 +213,7 @@
                 var results = (funcNameRegex).exec((ref).constructor.toString());
                 return (results && results.length > 1) ? results[1] : "";
             },
-            typeof: function(ref) {
+            typeof: function get_typeof(ref) {
                 var ret_val = typeof(ref);
                 if (ret_val == 'object') {
                     if (ref == null) {
@@ -232,7 +235,7 @@
                 }
                 return ret_val;
             },
-            pathval: function(args) {
+            pathval: function pathval(args) {
                 var args_type = jk.typeof(args);
                 var ret_val;
                 if (args_type == 'array') {
@@ -258,7 +261,21 @@
                 return ret_val;
             },
 
-            is_same: function(ref1, ref2) {
+            pathval_and_typeof: function pathval_and_typeof(args){
+                var ret_val;
+
+                var val = jk.pathval(args);
+                var val_typeof = jk.typeof(val);
+
+                ret_val = {
+                    typeof: val_typeof,
+                    val: val,
+                };
+
+                return ret_val;
+            },
+
+            is_same: function is_same(ref1, ref2) {
                 var ret_val = false;
                 var str_opt = {recursive:false};
                 if ( jk.stringify(ref1, str_opt) == jk.stringify(ref2, str_opt) ) {
@@ -266,11 +283,11 @@
                 }
                 return ret_val;
             },
-            is_loopable: function(ref) {
+            is_loopable: function is_loopable(ref) {
                 return ref != null ? /object|function/.test(typeof(ref)) ? true : false : false;
             },
             // mix deep copy and partial deep copy
-            deep_copy_same: function(ref) { //dcs regex, date? change to ref copy?
+            deep_copy_same: function deep_copy_same(ref) { //dcs regex, date? change to ref copy?
                 var ref_js_type = jk.typeof(ref);
                 var ret_val = ref;
                 if (ref_js_type == 'object') {
@@ -290,7 +307,7 @@
                 }
                 return ret_val;
             },
-            deep_copy: function(args) {
+            deep_copy: function deep_copy(args) {
                 var args_js_type = jk.typeof(args);
                 var ret_val;
                 if (args_js_type == 'object') {
@@ -312,7 +329,7 @@
                 }
                 return ret_val;
             },
-            deep_copy_recursive: function(args) {
+            deep_copy_recursive: function deep_copy_recursive(args) {
                 var args_js_type = jk.typeof(args);
                 var ret_val;
 
@@ -391,7 +408,7 @@
                     }
                 }
             },
-            is_index_match: function(args) {
+            is_index_match: function is_index_match(args) {
                 var args_js_type = jk.typeof(args);
                 var ret_val;
                 if (args_js_type == 'object') {
@@ -409,7 +426,7 @@
                 }
                 return ret_val;
             },
-            traverse_fun: function(args) {
+            traverse_fun: function traverse_fun(args) {
                 var args = args || {};
                 var fn = args.fn;
                 var fn_args = args.fn_args;
@@ -419,7 +436,7 @@
             },
             
 
-            get_option: function(opt_list, prop){
+            get_option: function get_option(opt_list, prop){
                 var ret_val;
                 for (var i = 0; i < opt_list.length; i++) {
                     var opt_li = opt_list[i];
@@ -430,14 +447,14 @@
                 }
                 return ret_val;
             },
-            get_typeofs: function(args){
+            get_typeofs: function get_typeofs(args){
                 var ret_val = {};
                 for (var i in args){
                     ret_val[i] = jk.typeof(args[i]);
                 }
                 return ret_val;
             },
-            get_arguments: function(args){
+            get_arguments: function get_arguments(args){
                 var ret_val = [];
                 for(var i in args){
                     var a = args[i];
@@ -541,6 +558,8 @@
                         
                         return ret_val;
                     },
+                    // add support to update on existing revision to garbage collect less for performance gains
+                    // default behavior on history == 0???
                     set: function(a0, a1) {
                         var a = jk.get_arguments([a0, a1]);
                         var has_val = false;
@@ -604,7 +623,7 @@
                             }
 
                             var get_diffs = path == '' ? true : cur_val != undefined ? true : false;
-                            if (!get_diffs && path) {
+                            if (!get_diffs && path) { // handle setting new prop to object if muteable
                                 var cur_path_parent = paths.slice(0, -1).join('.');
                                 var cur_val_parent = this.get({
                                     'path': cur_path_parent,
@@ -613,6 +632,20 @@
                                 var is_loopable_cur_val_parent = jk.is_loopable(cur_val_parent);
                                 if (is_loopable_cur_val_parent) {
                                     get_diffs = true;
+
+                                    var last_path = paths.slice(-1); // handle setting ignored prop to prev rev
+                                    var ignore_js_type = jk.typeof(ignore);
+                                    if (ignore_js_type == 'regexp') {
+                                        if (ignore.test(last_path)) {
+                                            get_diffs = false;
+                                        }
+                                    }
+                                    else if (ignore === last_path) {
+                                        get_diffs = false;
+                                    }
+                                    if(get_diffs == false){
+                                        cur_val_parent[last_path] = value;
+                                    }
                                 }
                             }
                             if (get_diffs) {
@@ -824,11 +857,11 @@
                                 var fc_path = path ? path + '.' + fc_index : fc_index;
                                 var continue_search = true;
                                 if (ignore_js_type == 'regexp') {
-                                    if (ignore.test(fc_path)) {
+                                    if (ignore.test(fc_index)) {
                                         continue_search = false;
                                     }
                                 }
-                                else if (ignore === fc_path) {
+                                else if (ignore === fc_index) {
                                     continue_search = false;
                                 }
                                 if (continue_search) {
@@ -879,11 +912,11 @@
                                 var tc_path = path ? path + '.' + tc_index : tc_index;
                                 var continue_search = true;
                                 if (ignore_js_type == 'regexp') {
-                                    if (ignore.test(tc_path)) {
+                                    if (ignore.test(tc_index)) {
                                         continue_search = false;
                                     }
                                 }
-                                else if (ignore === tc_path) {
+                                else if (ignore === tc_index) {
                                     continue_search = false;
                                 }
                                 if (continue_search) {
@@ -904,7 +937,6 @@
                             }
                         }
                     },
-                    // Add options on what args return
                     on: function(a0, a1, a2, a3) {
                         var a = jk.get_arguments([a0, a1, a2, a3]);
                         var has_val = false;
@@ -999,6 +1031,11 @@
                                     debugger;
                                 }
                             }});
+                            this._instance.sub.list.sort(function sort_ns_first(a, b){
+                                if(a.namespace == ns) return -1;
+                                else if(b.namespace == ns) return 1;
+                                return 0;
+                            });
                         }
                     },
 
@@ -1155,17 +1192,17 @@
                     var sub = this;
 
                     sub.set('', { packages: {}, dep_tree: {}, dep_indexes: {} });
-                    sub.on({path: /^packages.[^\.]+.dependencies.+$/gm, once: true, fn: function (e) {
+                    sub.on({path: /^packages\..+\.dependencies\..+$/gm, once: true, fn: function (e) {
                         var paths = e.paths;
                         var packages = {};
-                        var removed_packages = {};          
+                        var removed_packages = {};
                         for(var p_i in paths) {
                             var p = paths[p_i];
                             var p_val = sub.get(p);
-                            var package = p.replace(/^packages.|.dependencies.+$/g,'');
+                            var package = p.replace(/^packages\.|\.dependencies\..+$/g,'');
                             packages[package] = '*';
                             if (!p_val){
-                                var dependicy = p.replace(/^.*dependencies./,'');
+                                var dependicy = p.replace(/^.+dependencies\./,'');
                                 removed_packages[dependicy] = package;
                             }
                         }
@@ -1341,10 +1378,10 @@
                 return Animator;
             })(),
 
-            raf: function(fn){ return raf(fn); },
-            caf: function(fn){ return caf(fn); },
+            raf: function raf(fn){ return req_ani_frame(fn); },
+            caf: function caf(fn){ return can_ani_frame(fn); },
 
-            stringify: function(ref, options) {
+            stringify: function stringify(ref, options) {
                 var jss_parts = [];
                 this.stringify_recursive({
                     'val': ref,
@@ -1353,7 +1390,7 @@
                 });
                 return jss_parts.join('');
             },
-            stringify_recursive: function(args, level) {
+            stringify_recursive: function stringify_recursive(args, level) {
                 var jss_parts = args.jss_parts;
                 var val = args.val;
                 var args = /object/.test(jk.typeof(args)) ? args : {};
@@ -1451,14 +1488,14 @@
 
             // IMPORTANT TODO - make secure remove support for self executing functions
             // Should never be used on client
-            parse: function(ref, options) {
+            parse: function parse(ref, options) {
                 var ret_val = eval('(function(){ return ' + ref + '; })();');
                 return ret_val;
             },
             // parse_recursive: function(args, level) {},
             
-
-            instance_of: function(object, constructor) {
+            // fix circular reference?
+            instance_of: function instance_of(object, constructor) {
                 object = object.__proto__;
                 while (object != null) {
                     if (object == constructor.prototype)
@@ -1473,7 +1510,7 @@
                 }
                 return false;
             },
-            proto_merge: function(proto_list){
+            proto_merge: function proto_merge(proto_list){
                 var f = {};
                 var fp = {};
                 var pl = proto_list.slice(0, -1);
@@ -1507,7 +1544,7 @@
                 }
                 lip.constructors = constructors;
             },
-            construct: function(obj){
+            construct: function construct(obj){
                 var constructors = obj.__proto__.constructors;
                 if(constructors.__proto__ == Array.prototype){
                     for(var i = 0; i < constructors.length; i++){
@@ -1518,7 +1555,7 @@
             },
 
             // merge prop filter
-            merge: function(ref1, ref2, deep_copy){
+            merge: function merge(ref1, ref2, deep_copy){
                 var merge;
                 var ref1_typeof = jk.typeof(ref1);
                 var ref2_typeof = jk.typeof(ref2);
@@ -1658,7 +1695,7 @@
                 jStylist.prototype = {
                     parse: function(args){
                         var selectors = [];
-                        var cur_val = args.cur_val;
+                        var cur_val = args.cur_val || args.val;
                         var options = args.options;
                         this.parse_recursive({'selectors': selectors, 'cur_val': cur_val});
                         var css_strings = [];
@@ -1736,7 +1773,7 @@
             
 
 
-            diff: function( old_str, new_str, options) {
+            diff: function diff( old_str, new_str, options) {
                 var options = jk.typeof(options) == 'object' ? options : {};
                 var splitter = options.splitter != undefined ? options.splitter : '';
                 var ret_type = options.ret_type || 'normal'; // transform
@@ -1895,7 +1932,7 @@
 
                 return ret_val;
             },
-            diff_transform: function(args) {
+            diff_transform: function diff_transform(args) {
                 var args = args || {};
                 var head = args.head;
                 var type = args.type;
@@ -1965,18 +2002,83 @@
             })(),
 
             Layout: (function(){
-                function Layout(args){
-                    this._instance = {
-                        sub: new jk.jSub()
-                    }
-                    this._instance.sub.set('',{                      
+                function Layout(){
+                    var s = this;
+                    jk.construct(s);
+                    s.set('',{
                         pos: { x: 0, y: 0, z: 0 },
-                        scale: { x: 0, y: 0, z: 0 },                      
-                        groups: {},
+                        scale: { x: 0, y: 0, z: 0 },
+                        // groups: {},
+                        // classes: [],
+                        // class_rules: {},
+                        // parent: {},                        
+                        rules: {},
+                        children: {},
                         id: jk.huid()
                     });
+
+                    s.on(/^children.[^\.]+$/gm, function(e){
+                        var path = e.paths[0];
+                        var val = s.get(path);
+                        if(val){ // child added
+                        }
+                        else { // child removed
+                        }
+                    });
+
+                    // s.on(/^groups.[^\.]+.members.[^\.]+$/gm, function(e){
+                    //     var path = e.paths[0];
+                    //     var val = s.get(path);
+
+                    //     var group_name = path.replace(/^groups.|.members.[^\.]+$/g, '');
+                    //     var member_name = path.replace(/^groups.[^\.]+.members./, '');
+                        
+                    //     var group = s.get(path.replace(/^groups.[^\.]+/), '');
+                    //     var member = s.get(path.replace(/^groups.[^\.]+.members.[^\.]+$/), '');
+                    //     if(val){ // member added
+                    //     }
+                    //     else { // member removed
+                    //     }
+                    // });
                 }
-                Layout.prototype = {}
+                
+                var lp = {};
+
+                if(env.browser){
+                    var canvas = document.createElement('canvas');
+                    var ctx = canvas.getContext('2d');
+                    // var t =  ctx.measureText("test"); // t.width
+                    // ctx.font = "48px serif";
+                    // ctx.fillText("Hello world", 10, 50);
+                    // ctx.strokeText("Hello world", 10, 50);
+                    lp = {
+                        canvas: canvas,
+                        ctx: ctx,
+                        measure_text: function(text, options){
+                            var options = options || {};
+                            var rules = options.rules || {};                            
+                            var word_type = rules.word_type || 'space_break';
+                            var font = rules.font || '16px serif';
+
+                            var height;
+
+                            var ctx = this.ctx;
+                            ctx.font = font;
+                            
+                            var res;
+
+                            if(word_type == 'space_break'){
+                                var words = text.split(' ');
+
+                                //ctx.measureText();
+                            }
+
+                            return res;
+                        }
+                    };
+                }
+
+                Layout.prototype = lp;
 
                 return Layout;
             })(),
@@ -1992,6 +2094,7 @@
         jSynk.prototype.fn = jSynk.prototype;
 
         jk.proto_merge([jk.jSub, jk.Depender]);
+        jk.proto_merge([jk.jSub, jk.Layout]);
         
         return jk;
     })();

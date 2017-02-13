@@ -84,7 +84,7 @@
                     }
                 }
                 cias.prototype = {
-                    convert: function(val){
+                    convert: function convert(val){
                         if (jk.typeof(val) == 'number'){
                             var instance = this._instance;
                             var letters = instance.letters;
@@ -114,6 +114,11 @@
                             }
                             return result;
                         }
+                    },
+                    __init__: function(){
+                        jk.cias.prototype._instance = new jk.cias()['_instance'];
+
+                        delete jk.cias.prototype.__init__;
                     }
                 };
                 return cias;
@@ -137,7 +142,7 @@
                     start_time: (new Date()).getTime(),
                     start_time_str: '',
                     seperator: '_',                    
-                    padding: function(num_str){
+                    padding: function padding(num_str){
                         var str = num_str || '';
                         if(str.length < 10){
                             var r = Math.random().toString().slice(2);
@@ -145,14 +150,14 @@
                         }
                         return parseInt(str);
                     },
-                    get_start_time_str: function(){
+                    get_start_time_str: function get_start_time_str(){
                         return jk.cias(this.start_time) + this.seperator + jk.cias((this.get_cur_times()[1])) + this.seperator;
                     },
-                    get_cur_times: function(){
+                    get_cur_times: function get_cur_times(){
                         var elapsed_time = (new Date()).getTime() - this.start_time;
                         return [ elapsed_time, this.padding() ];
                     },
-                    generate: function(){
+                    generate: function generate(){
                         var cur_times = this.get_cur_times();
 
                         var huid = this.start_time_str || '';
@@ -161,17 +166,23 @@
 
                         return huid;
                     },
+                    __init__: function(){
+                        var huid_p = jk.huid.prototype;
+                        huid_p.start_time_str = huid_p.get_start_time_str();
+
+                        delete jk.huid.prototype.__init__;
+                    },
                 };
                 
                 var overriden = false;
                 if(env.nodejs){
                     if(typeof process == 'object' && typeof process.hrtime == 'function'){
-                        var get_cur_times = function(){
+                        function get_cur_times_nodejs(){
                             var process_hrtime = process.hrtime();
                             var elapsed_time = (new Date()).getTime() - this.start_time;
                             return [elapsed_time, process_hrtime[1]];
                         }
-                        huid.prototype.get_cur_times = get_cur_times;
+                        huid.prototype.get_cur_times = get_cur_times_nodejs;
                         overriden = true;
                     }
                     else {
@@ -180,7 +191,7 @@
                 }
                 if(env.browser && !overriden){
                     if(typeof performance == 'object' && typeof performance.now == 'function'){
-                        var get_cur_times = function(){
+                        function get_cur_times_browser(){
                             var splits = performance.now().toString().split('.');
                             var str = splits[1] || '';
                             if(str.length >= 3 || str.indexOf('00000') != -1){ // chrome, firefox 
@@ -191,7 +202,7 @@
                             var ret_val = [parseInt(splits[0]), parseInt(this.padding(str))];
                             return ret_val;
                         }
-                        huid.prototype.get_cur_times = get_cur_times;
+                        huid.prototype.get_cur_times = get_cur_times_browser;
                         overriden = true;
                     }
                 }
@@ -235,36 +246,52 @@
                 }
                 return ret_val;
             },
-            pathval: function pathval(args) {
-                var args_type = jk.typeof(args);
+
+            pathval: function pathval(paths, options) {
+                var options = options || {};
+                var paths_type = jk.typeof(paths);
                 var ret_val;
-                if (args_type == 'array') {
-                    var cur_val = args[0];
+                if (paths_type == 'array') {
+                    var parent, prop_path;
+                    var cur_val = paths[0];
                     var start_val = 1;
                     var sv_type = jk.typeof(cur_val);
                     if (sv_type == 'string') {
                         start_val = 0;
                         cur_val = jk.this;
+                        parent = cur_val;
                     }
-                    for (var i = start_val; i < args.length; i++) {
-                        var LI = args[i];
-                        var cv_type = jk.typeof(cur_val);
-                        if (!/null|undefined/.test(cv_type) && cur_val.hasOwnProperty(LI)) {
+                    var has_prop = cur_val != null;
+                    for (var i = start_val; i < paths.length; i++) {
+                        var LI = paths[i];
+                        if (cur_val != null && cur_val.hasOwnProperty(LI)) {
+                            parent = cur_val;                            
                             cur_val = cur_val[LI];
+                            has_prop = true;
                         }
                         else {
                             cur_val = undefined;
+                            has_prop = false;
                         }
                     }
-                    ret_val = cur_val;
+                    if(options.hasOwnProperty('set') && parent != null){
+                        var prop_path = paths.slice(-1)[0];
+                        parent[prop_path] = cur_val = options.set;
+                    }
+                    if(options.info){
+                        ret_val = { val: cur_val, has_prop: has_prop, parent: parent, prop_path: prop_path };
+                    }
+                    else {
+                        ret_val = cur_val;
+                    }
                 }
                 return ret_val;
             },
 
-            pathval_and_typeof: function pathval_and_typeof(args){
+            pathval_and_typeof: function pathval_and_typeof(paths, options){
                 var ret_val;
 
-                var val = jk.pathval(args);
+                var val = jk.pathval(paths);
                 var val_typeof = jk.typeof(val);
 
                 ret_val = {
@@ -472,30 +499,36 @@
             jSub: (function(){
                 function jSub(args) {
                     var args = args || {};
-                    this._instance = {
-                        'args': args,
-                        'rev': {
-                            'changes': {},
-                            'current': '',
-                            'max_history': 1
-                        },
-                        'sub': {
-                            'list': []
-                        },
-                        'version': '1.0.0'
-                    };
-                    if (args.max_history != undefined) {
-                        this._instance.rev.max_history = args.max_history;
+                    var s = this;
+                    if (jk.instance_of(s, jk.jSub)){
+                        s._instance = {
+                            'args': args,
+                            'rev': {
+                                'changes': {},
+                                'current': '',
+                                'max_history': 1
+                            },
+                            'sub': {
+                                'list': []
+                            },
+                            'version': '1.0.0'
+                        };
+                        if (args.max_history != undefined) {
+                            s._instance.rev.max_history = args.max_history;
+                        }
+                        if (args.value != undefined) {
+                            s.set({
+                                'value': args.value
+                            });
+                        }
                     }
-                    if (args.value != undefined) {
-                        this.set({
-                            'value': args.value
-                        });
+                    else{
+                        return new jk.jSub(args);
                     }
                 }
                 
                 jSub.prototype = {
-                    get: function(args) {
+                    get: function get(args) {
                         var args_typeof = jk.typeof(args);
                         var options;
                         if (args_typeof == 'object') {
@@ -558,9 +591,7 @@
                         
                         return ret_val;
                     },
-                    // add support to update on existing revision to garbage collect less for performance gains
-                    // default behavior on history == 0???
-                    set: function(a0, a1) {
+                    set: function set(a0, a1) {
                         var a = jk.get_arguments([a0, a1]);
                         var has_val = false;
                         var value, path, paths, instance, ignore;
@@ -595,6 +626,8 @@
                             var rev = instance.rev;
                             var changes = rev.changes;
 
+                            var max_history = rev.max_history;
+
                             var path_type = jk.type(path);
                             if (path_type == 'String') {
                                 paths = path.split('.');
@@ -610,12 +643,18 @@
                             });
 
                             var cur_indexes = {};
+                            var cur_str_indexes;
+                            var cur_child_indexes;
                             var cur_changes_indexes = {
                                 'text_indexes': '',
                                 'path_indexes': {},
                                 'paths': [],
-                                'length': 0
                             };
+
+                            if(max_history == 0){
+                                cur_str_indexes = {};
+                                cur_child_indexes = {};
+                            }
 
                             var min_diffs = jk.pathval([instance,'args','min_diffs']);
                             if (min_diffs) {
@@ -646,6 +685,13 @@
                                     if(get_diffs == false){
                                         cur_val_parent[last_path] = value;
                                     }
+                                    else{
+                                        // if(max_history == 0){
+                                        //     var cur_rev_change = changes[rev.current];
+                                        //     var crc_indexes = pv([cur_rev_change,'indexes']);
+                                        //     var crc_child_indexes = pv([cur_rev_change,'child_indexes']);
+                                        // }
+                                    }
                                 }
                             }
                             if (get_diffs) {
@@ -654,6 +700,8 @@
                                     'f': cur_val,
                                     't': value,
                                     'indexes': cur_indexes,
+                                    'child_indexes': cur_child_indexes,
+                                    'str_indexes': cur_str_indexes,
                                     'change_indexes': cur_changes_indexes,
                                     'instance': instance,
                                     'ignore': ignore
@@ -663,6 +711,8 @@
                                     'f': cur_val,
                                     't': value,
                                     'indexes': cur_indexes,
+                                    'child_indexes': cur_child_indexes,
+                                    'str_indexes': cur_str_indexes,
                                     'change_indexes': cur_changes_indexes,
                                     'instance': instance,
                                     'ignore': ignore
@@ -670,13 +720,33 @@
                             }
                             cur_changes_indexes.text_indexes = cur_changes_indexes.paths.join('\n')
 
-                            if (cur_changes_indexes.length > 0) {
+                            if (cur_changes_indexes.paths.length > 0) {
+
                                 // reference unchanged refernce
-                                if (path != '' && rev.current != '') {
+                                if (rev.current != '') {
+                                    
                                     var prev_indexes = changes[rev.current].indexes;
                                     for (var i_i in prev_indexes) {
                                         if (!cur_indexes.hasOwnProperty(i_i)) {
                                             cur_indexes[i_i] = prev_indexes[i_i];
+                                        }
+                                    }
+
+                                    var prev_child_indexes = changes[rev.current].child_indexes;
+                                    if(prev_child_indexes && cur_child_indexes){
+                                        for(var i_i in prev_child_indexes){
+                                            if(!cur_child_indexes.hasOwnProperty(i_i)){
+                                                cur_child_indexes[i_i] = prev_child_indexes[i_i];
+                                            }
+                                        }
+                                    }
+
+                                    var prev_str_indexes = changes[rev.current].str_indexes;
+                                    if(prev_str_indexes && cur_str_indexes){
+                                        for(var i_i in prev_str_indexes){
+                                            if(!cur_str_indexes.hasOwnProperty(i_i)){
+                                                cur_str_indexes[i_i] = prev_str_indexes[i_i];
+                                            }
                                         }
                                     }
                                     // merge old refs with new refs
@@ -701,27 +771,43 @@
                                     }
                                 }
                                 // save revision
-                                var rev_guid = jk.huid();
-                                var cur_branches = {};
-                                if (rev.current) {
-                                    cur_branches = { from: rev.current }
-                                    var prev_branches = changes[rev.current].branches;
-                                    if (!prev_branches.to) {
-                                        prev_branches.to = {};
+                                var rev_change;
+                                if(rev.max_history != 0 || rev.current == ''){
+                                    var rev_guid = jk.huid();
+                                    var cur_branches = {};
+                                    if (rev.current) {
+                                        cur_branches = { from: rev.current }
+                                        var prev_branches = changes[rev.current].branches;
+                                        if (!prev_branches.to) {
+                                            prev_branches.to = {};
+                                        }
+                                        prev_branches.to[rev_guid] = true;
                                     }
-                                    prev_branches.to[rev_guid] = true;
+
+                                    var prev_rev = rev.current;
+
+                                    var rev_change = {
+                                        'diffs': cur_changes_indexes,
+                                        'indexes': cur_indexes,
+                                        'branches': cur_branches,
+                                        'date': new Date().getTime()
+                                    };                 
+                                    changes[rev_guid] = rev_change;
+                                    rev.current = rev_guid;
+                                }
+                                else if(rev.max_history == 0){
+                                    rev_change = changes[rev.current];
+                                    rev_change['indexes'] = cur_indexes;
+                                }
+                                
+
+                                if(cur_child_indexes){
+                                    rev_change['child_indexes'] = cur_child_indexes;
                                 }
 
-                                var prev_rev = rev.current;
-
-                                var rev_change = {
-                                    'diffs': cur_changes_indexes,
-                                    'indexes': cur_indexes,
-                                    'branches': cur_branches,
-                                    'date': new Date().getTime()
-                                };                 
-                                changes[rev_guid] = rev_change;
-                                rev.current = rev_guid;
+                                if(cur_str_indexes){
+                                    rev_change['str_indexes'] = cur_str_indexes;
+                                }
 
                                 if (min_diffs) {
                                     var vals = this.get({'path':'',history:1});
@@ -734,8 +820,10 @@
                                     // console.log(min_diff.diffs);
                                 }
 
+
+
                                 // keep desired history
-                                if (rev.max_history >= 0) {
+                                if (rev.max_history > 0 && isFinite(rev.max_history)) {
                                     jk.traverse_fun({
                                         'fn': function(args, fn) {
                                             var rev = args.instance.rev;
@@ -823,37 +911,95 @@
                             }
                         }
                     },
-                    get_from_diffs: function(args) {
+                    get_from_diffs: function get_from_diffs(args) {
+                        var pv = jk.pathval;
+
                         var path = args.path;
+                        var path_index = args.path_index || '';
+                        var parent_path = args.parent_path || '';
                         var f = args.f;
                         var t = args.t;
-                        var indexes = args.indexes || {};
+                        var indexes = args.indexes;
+                        var child_indexes = args.child_indexes;
+                        var str_indexes = args.str_indexes;
                         var change_indexes = args.change_indexes;
                         var instance = args.instance || this._instance;
                         var ignore = args.ignore || instance.ignore || /^p_ignore$/;
                         var ignore_js_type = jk.typeof(ignore);
 
-                        if (!indexes.hasOwnProperty(path)) {
+                        var rev = instance.rev;
+                        var max_history = rev.max_history;
+                        var cur_rev_change = rev.changes[rev.current];
+                        var crc_indexes = pv([cur_rev_change,'indexes']);
+                        var crc_child_indexes = pv([cur_rev_change,'child_indexes']);
+                        var crc_str_indexes = pv([cur_rev_change,'str_indexes']);
+
+                        var f_str, t_str, vals_is_same;
+
+                        if (indexes && !indexes.hasOwnProperty(path)) {
                             indexes[path] = t;
-                            if (!jk.is_same(f, t)) {
+                            if(crc_str_indexes){
+                                f_str = crc_str_indexes[path] || jk.stringify();
+                            }
+                            if(!f_str){
+                                f_str = jk.stringify(f,{recursive:false});
+                            }
+                            t_str = jk.stringify(t,{recursive:false});
+                            vals_is_same = f_str == t_str;
+                            if (!vals_is_same) {
                                 if (change_indexes) {
                                     change_indexes.paths.push(path);
                                     change_indexes.path_indexes[path] = true;
-                                    change_indexes.length++;
                                     if (change_indexes.path_str_indexes) {
                                         change_indexes.path_str_indexes[path] = {
-                                            same:jk.stringify(t),
-                                            recursive:jk.stringify(t,{recursive:false})
+                                            same:jk.stringify(t,{recursive:false}),
+                                            recursive:jk.stringify(t)
                                         };
+                                    }
+                                }
+                                if(str_indexes){
+                                    if(t_str != 'undefined'){
+                                        str_indexes[path] = t_str;
+                                    }
+                                }
+                                if(max_history == 0){
+                                    if(crc_indexes){
+                                        if(t_str != 'undefined'){
+                                            crc_indexes[path] = t;
+                                        }
+                                        else {
+                                            delete crc_indexes[path];
+                                        }
+                                    }
+                                    if(crc_child_indexes){
+                                        if(t_str != 'undefined'){
+                                            //crc_child_indexes[path] = t_str;
+                                        }
+                                        else {
+                                            delete crc_child_indexes[parent_path][path_index];
+                                            delete crc_child_indexes[path];
+                                        }
+                                    }
+                                    if(crc_str_indexes){
+                                        if(t_str != 'undefined'){
+                                            crc_str_indexes[path] = t_str;
+                                        }
+                                        else {
+                                            delete crc_str_indexes[path];
+                                        }
                                     }
                                 }
                             }
                         }
                         var t_loopable = jk.is_loopable(t);
-                        var f_loopable = jk.is_loopable(f);
+                        var fc_list = f;
+                        if(crc_child_indexes && crc_child_indexes[path]){
+                            fc_list = crc_child_indexes[path];
+                        }
+                        var f_loopable = jk.is_loopable(fc_list);
                         if (f_loopable) {
-                            for (var fc_index in f) {
-                                var fc = f[fc_index];
+                            for (var fc_index in fc_list) {
+                                var fc = fc_list[fc_index];
                                 var fc_path = path ? path + '.' + fc_index : fc_index;
                                 var continue_search = true;
                                 if (ignore_js_type == 'regexp') {
@@ -866,11 +1012,16 @@
                                 }
                                 if (continue_search) {
                                     var tc = t_loopable ? t[fc_index] : undefined;
+
                                     this.get_from_diffs({
                                         'path': fc_path,
+                                        'parent_path': path,
+                                        'path_index': fc_index,
                                         'f': fc,
                                         't': tc,
                                         'indexes': indexes,
+                                        'child_indexes': child_indexes,
+                                        'str_indexes': str_indexes,
                                         'instance': instance,
                                         'ignore': ignore,
                                         'change_indexes': change_indexes
@@ -879,28 +1030,72 @@
                             }
                         }
                     },
-                    get_to_diffs: function(args) {
+                    get_to_diffs: function get_to_diffs(args) {
+                        var pv = jk.pathval;
+
                         var path = args.path;
+                        // var path_index = args.path_index;
                         var f = args.f;
                         var t = args.t;
-                        var indexes = args.indexes || {};
+                        var indexes = args.indexes;
+                        var child_indexes = args.child_indexes;
+                        var str_indexes = args.str_indexes;
+                        var change_indexes = args.change_indexes;                        
                         var instance = args.instance || this._instance;
                         var ignore = args.ignore || instance.ignore || /^p_ignore$/;
                         var ignore_js_type = jk.typeof(ignore);
-                        var change_indexes = args.change_indexes;
 
-                        if (indexes[path] == undefined) {
+                        var rev = instance.rev;
+                        var max_history = rev.max_history;
+                        var cur_rev_change = rev.changes[rev.current];
+                        var crc_indexes = pv([cur_rev_change,'indexes']);
+                        var crc_str_indexes = pv([cur_rev_change,'str_indexes']);
+
+                        if(child_indexes && !child_indexes[path]){
+                            child_indexes[path] = {};
+                        }
+
+                        if (indexes && !indexes.hasOwnProperty(path)) {
                             indexes[path] = t;
-                            if (!jk.is_same(f, t)) {
+                            var f_str = undefined;
+                            if(crc_str_indexes){
+                                f_str = crc_str_indexes[path] || jk.stringify();
+                            }
+                            if(!f_str){
+                                f_str = jk.stringify(f,{recursive:false});
+                            }
+                            var t_str = jk.stringify(t,{recursive:false});
+                            var vals_is_same = f_str == t_str;
+                            if (!vals_is_same) {
                                 if (change_indexes) {
                                     change_indexes.paths.push(path);
                                     change_indexes.path_indexes[path] = true;
-                                    change_indexes.length++;
                                     if (change_indexes.path_str_indexes) {
                                         change_indexes.path_str_indexes[path] = {
                                             same:jk.stringify(t,{recursive:false}),
                                             recursive:jk.stringify(t),
                                         };
+                                    }
+                                }
+                                if(str_indexes){
+                                    str_indexes[path] = t_str;
+                                }
+                                if(max_history == 0){
+                                    if(crc_indexes){
+                                        if(t_str != 'undefined'){
+                                            crc_indexes[path] = t;
+                                        }
+                                        else {
+                                            delete crc_indexes[path];
+                                        }
+                                    }
+                                    if(crc_str_indexes){
+                                        if(t_str != 'undefined'){
+                                            crc_str_indexes[path] = t_str;
+                                        }
+                                        else {
+                                            delete crc_str_indexes[path];
+                                        }
                                     }
                                 }
                             }
@@ -926,18 +1121,25 @@
                                     });
                                     this.get_to_diffs({
                                         'path': tc_path,
+                                        // 'parent_path': path,
+                                        // 'path_index': tc_index,
                                         'f': fc,
                                         't': tc,
                                         'indexes': indexes,
+                                        'child_indexes': child_indexes,
+                                        'str_indexes': str_indexes,
                                         'instance': instance,
                                         'ignore': ignore,
                                         'change_indexes': change_indexes
                                     });
+                                    if(child_indexes && !child_indexes[path][tc_index]){
+                                        child_indexes[path][tc_index] = true;
+                                    }
                                 }
                             }
                         }
                     },
-                    on: function(a0, a1, a2, a3) {
+                    on: function on(a0, a1, a2, a3) {
                         var a = jk.get_arguments([a0, a1, a2, a3]);
                         var has_val = false;
                         var path, instance, namespace, fn, fn_args, once;
@@ -997,7 +1199,7 @@
                             });
                         }
                     },
-                    off: function(args) {
+                    off: function off(args) {
                         var args_typeof = jk.typeof(args);
                         var instance = this._instance;
                         var instance_sub_list = instance.sub.list;
@@ -1017,7 +1219,7 @@
                     // on_before_set = function(args) {}
                     // off_before_set = function(args) {}
 
-                    debug: function(args){
+                    debug: function debug(args){
                         var ns = 'internal_jSub_debugger';
                         this.off(ns);
                         if (args){
@@ -1039,19 +1241,21 @@
                         }
                     },
 
-                    mirror: function(args){
+                    mirror: function mirror(args){
                         var cur_inst = this;
                         var inst = args.instance;
 
                         var path = args.path || '';
                         var from_path = args.from_path || '';
-                        var merge = args.merge || false;
+                        var merge = args.merge != null ? args.merge : false;
                         // copy from whom ? inst always?
+
+                        var copy = args.copy != null ? args.copy : true;
                         if(merge){
                             var val = jk.merge(cur_inst.get(path), inst.get(from_path));
                             cur_inst.set({'path':path,'value':val});
                         }
-                        else {
+                        else if(copy){
                             cur_inst.set({'path':path,'value':inst.get(from_path)});
                         }
 
@@ -1077,22 +1281,28 @@
             
             Agent: (function(){
                 function Agent(options){
-                    this._instance = {
-                        'missions': [],
-                        'current': -1,
-                        'last_mission_time': 0,
-                        'options': options,
-                    };
+                    var s = this;
+                    if (jk.instance_of(s, jk.Agent)){
+                        s._instance = {
+                            'missions': [],
+                            'current': -1,
+                            'last_mission_time': 0,
+                            'options': options,
+                        };
+                    }
+                    else {
+                        return new jk.Agent(options);
+                    }
                 }
                 Agent.prototype = {
                     default_options: {
                         'catch_error': true,
                         'capture_performance': true,
                     },
-                    get_option: function(prop){
+                    get_option: function get_option(prop){
                         return jk.get_option([this._instance.options,this.default_options], prop);
                     },
-                    add_mission: function(args){
+                    add_mission: function add_mission(args){
                         var mission;
                         var args_js_type = jk.typeof(args);
                         if (args_js_type == 'function') {
@@ -1105,10 +1315,10 @@
                             this._instance.missions.push(mission);
                         }
                     },
-                    clear_missions: function(){
+                    clear_missions: function clear_missions(){
                         this._instance.missions = [];
                     },
-                    run_missions: function(){
+                    run_missions: function run_missions(){
                         this._instance.current = -1;
                         var on_start = this.get_option('on_start');
                         if (typeof on_start == 'function') {
@@ -1116,7 +1326,7 @@
                         }
                         this.next();
                     },
-                    next: function(){
+                    next: function next(){
                         var instance = this._instance;
 
                         if (instance.current > -1) {
@@ -1260,7 +1470,7 @@
 
                 }
                 Depender.prototype = {
-                    get_dep_tree_recursive: function(package, tree) {
+                    get_dep_tree_recursive: function get_dep_tree_recursive(package, tree) {
                         var package_dependencies = this.get('packages.'+ package +'.dependencies');
                         for(var d_i in package_dependencies){
                             var d = package_dependencies[d_i];
@@ -1269,6 +1479,11 @@
                                 this.get_dep_tree_recursive(d_i, tree);
                             }
                         }
+                    },
+                    __init__: function(){
+                        jk.proto_merge([jk.jSub, jk.Depender]);
+
+                        delete jk.Depender.prototype.__init__;
                     }
                 };
                 
@@ -1282,7 +1497,7 @@
                     queue: [],
                     id: -1,
                     is_animating: false,
-                    animate: function(args){
+                    animate: function animate(args){
                         var args_typeof = jk.typeof(args);
                         if (args_typeof == 'object') {
                             var from = args.from;
@@ -1319,7 +1534,7 @@
                             }
                         }
                     },
-                    tick: function(timestamp){
+                    tick: function tick(timestamp){
                         var self = jk.Animator.prototype;
                         var continue_animating = false;
                         var cur_time = new Date().getTime();
@@ -1356,7 +1571,7 @@
                             self.id = jk.raf(self.tick);
                         }
                     },
-                    stop: function(args) {
+                    stop: function stop(args) {
                         var args_typeof = jk.typeof(args);
                         var self = jk.Animator.prototype;
                         var queue = self.queue;
@@ -1595,7 +1810,7 @@
                 function jMarkup(args) {}
 
                 jMarkup.prototype = {
-                    parse: function(args){
+                    parse: function parse(args){
                         var markups = [];
                         var cur_val = args.cur_val;
                         var ms = [];
@@ -1604,7 +1819,7 @@
                         var markup = mstrs.join('');
                         return markup;
                     },
-                    parse_recursive: function(args){
+                    parse_recursive: function parse_recursive(args){
                         var markups = args.markups;
                         var mstrs = args.mstrs;
                         var parent = args.parent;
@@ -1693,7 +1908,7 @@
                 function jStylist(args) {}
                 
                 jStylist.prototype = {
-                    parse: function(args){
+                    parse: function parse(args){
                         var selectors = [];
                         var cur_val = args.cur_val || args.val;
                         var options = args.options;
@@ -1711,7 +1926,7 @@
                         var css = css_strings.join('');
                         return css;
                     },
-                    parse_recursive: function(args){
+                    parse_recursive: function parse_recursive(args){
                         var selectors = args.selectors;
                         var cur_val = args.cur_val;
                         var typeof_cur_val = jk.typeof(cur_val);
@@ -1972,10 +2187,18 @@
             },
 
             Async: (function(){
-                function Async(args){}
+                function Async(args){
+                    var s = this;
+                    if (jk.instance_of(s, jk.jSub)){
+                    
+                    }
+                    else {
+                        
+                    }
+                }
                 
                 Async.prototype = {
-                    recursive: function(args){
+                    recursive: function recursive(args){
                         var complete = args.complete;
                         var call = {
                             checks: 0,
@@ -1993,7 +2216,7 @@
                         }
                         return call;
                     },
-                    pararell: function(){
+                    pararell: function pararell(){
                         // TODO - use multiple Agents?
                     }
                 };
@@ -2004,97 +2227,283 @@
             Layout: (function(){
                 function Layout(){
                     var s = this;
-                    jk.construct(s);
-                    s.set('',{
-                        pos: { x: 0, y: 0, z: 0 },
-                        scale: { x: 0, y: 0, z: 0 },
-                        // groups: {},
-                        // classes: [],
-                        // class_rules: {},
-                        // parent: {},                        
-                        rules: {},
-                        children: {},
-                        id: jk.huid()
-                    });
+                    if (jk.instance_of(s, jk.Layout)){
+                        jk.construct(s);
 
-                    s.on(/^children.[^\.]+$/gm, function(e){
+                        s.bind();
+                    }
+                    else {
+                        return new jk.Layout();
+                    }
+                }
+                
+                var lp = {
+                    __init__: function(){
+                        jk.proto_merge([jk.jSub, jk.Layout]);
+
+                        var sub = lp.sub = new jk.jSub({max_history: 0});
+
+                        sub.set('', { rules:{}});
+
+                        delete lp.__init__;
+                    },
+                    bind: function(){
+                        var s = this;
+
+                        s._instance.rev.max_history = 0;
+                        
+                        var id = s.id = jk.huid();
+
+                        var psub = s.sub;
+
+                        // parent or/and parents ?!?!?
+
+                        s.set('',{
+                            pos: { x: 0, y: 0, z: 0 }, scale: { x: 0, y: 0, z: 0 },
+                            calc_pos: { x: 0, y: 0, z: 0 }, calc_scale: { x: 0, y: 0, z: 0 },
+                            // groups: {}, classes: [], class_rules: {}, parent: {},
+                            rules: {}, calcs: {},
+                            children: {}, children_len : 0,
+                            id: s.id, // group: s.id,
+                        });
+
+                        s.store = {};
+
+                        s.on(/^children.[^\.]+$/gm, s.fn_children);
+
+                        s.on(/^calcs.[^\.]+.out.sx$|^scale.x$/gm, true, s.fn_calc_scale_x);
+
+                        s.on(/^calcs.[^\.]+.out.sy$|^scale.y$/gm, true, s.fn_calc_scale_y);
+
+                        s.on(/^calcs.[^\.]+.out.px$|^pos.x$/gm, true, s.fn_calc_pos_x);
+
+                        s.on(/^calcs.[^\.]+.out.py$|^pos.y$/gm, true, s.fn_calc_pos_y);
+
+                        s.on('remove', s.fn_remove);
+
+                        var cur_rules = psub.get('rules');
+                        for(var cr_i in cur_rules){
+                            s.rule_bind({ sub: s, rule: cr_i });
+                        }
+                    },
+                    fn_children: function(e){
+                        var s = this, pat = jk.pathval_and_typeof;
+                        var store = s.store;
                         var path = e.paths[0];
                         var val = s.get(path);
                         if(val){ // child added
+                            var pat_sub = pat([val,'p_ignore','sub']);
+                            if(pat_sub.typeof == 'object'){
+
+                                s.set('children_len', s.get('children_len') + 1);
+
+                                var child_name = path.replace(/^children./,'');
+                                var sub = store[path] = pat_sub.val;
+
+                                var cur_rules = sub.get('rules');
+                                for(var cr_i in cur_rules){
+                                    s.rule_bind({ sub: s, child_sub: sub, rule: cr_i});
+                                }
+                                s.on({ path: new RegExp('^' + path + '.rules.[^\.]+$','gm'), namespace: path, fn: function(e){
+                                    var rule_path = e.paths[0];
+                                    var val = sub.get(rule_path);
+                                    var rule_name = rule_path.replace(/^.*rules./,'');
+                                    var rule_args = { sub: s, child_sub: sub, rule: rule_name };
+                                    if(val){ // sub to layout rule
+                                        s.rule_bind(rule_args);
+                                    }
+                                    else { // unsub to layout rule
+                                        s.rule_unbind(rule_args);
+                                    }
+                                }});
+
+                                s.on({ path: path + '.remove', namespace: path, fn: function(e){
+                                    s.off(sub.id);
+                                }});
+                            }
                         }
                         else { // child removed
+                            s.off(path);
+                            store[path].off(path); // off id???
+                            delete store.path;
+                            s.set('children_len', s.get('children_len') - 1);
                         }
-                    });
+                    },
+                    fn_calc_scale_x: function(){
+                        var s = this, pat = jk.pathval_and_typeof;
+                        var sx = s.get('scale.x');
+                        var calcs = s.get('calcs');
+                        for(var cli_i in calcs){
+                            var cli = calcs[cli_i];
+                            var csx = pat([cli,'out','sx']);
+                            if(csx.typeof == 'number'){
+                                sx += csx.val;
+                            }
+                        }
+                        s.set('calc_scale.x', sx);
+                    },
+                    fn_calc_scale_y: function(){
+                        var s = this, pat = jk.pathval_and_typeof;
+                        var sy = s.get('scale.y');
+                        var calcs = s.get('calcs');
+                        for(var cli_i in calcs){
+                            var cli = calcs[cli_i];
+                            var csy = pat([cli,'out','sy']);
+                            if(csy.typeof == 'number'){
+                                sy += csy.val;
+                            }
+                        }
+                        s.set('calc_scale.y', sy);
+                    },
+                    fn_calc_pos_x: function(){
+                        var s = this, pat = jk.pathval_and_typeof;
+                        var px = s.get('pos.x');
+                        var calcs = s.get('calcs');
+                        for(var cli_i in calcs){
+                            var cli = calcs[cli_i];
+                            var cpx = pat([cli,'out','px']);
+                            if(cpx.typeof == 'number'){
+                                px += cpx.val;
+                            }
+                        }
+                        s.set('calc_pos.x', px);
+                    },
+                    fn_calc_pos_y: function(){
+                        var s = this, pat = jk.pathval_and_typeof;
+                        var py = s.get('pos.y');
+                        var calcs = s.get('calcs');
+                        for(var cli_i in calcs){
+                            var cli = calcs[cli_i];
+                            var cpy = pat([cli,'out','py']);
+                            if(cpy.typeof == 'number'){
+                                py += cpy.val;
+                            }
+                        }
+                        s.set('calc_pos.y', py);
+                    },
+                    fn_remove: function(){
+                        var s = this;
+                        var store = s.store;
+                        psub.off(id);
+                        s.off(/.*/);
+                        var re_child = /^children/;
+                        for(var sli_i in store){
+                            if(re_child.test(sli_i)){
+                                var sli = store[sli_i];
+                                sli.off(id);
+                            }
+                        }
+                    },
+                    rule_bind: function(args){
+                        var s = this;
+                        var psub = s.sub;
+                        var pat = jk.pathval_and_typeof;
 
-                    // s.on(/^groups.[^\.]+.members.[^\.]+$/gm, function(e){
-                    //     var path = e.paths[0];
-                    //     var val = s.get(path);
+                        var rule = args.rule;
 
-                    //     var group_name = path.replace(/^groups.|.members.[^\.]+$/g, '');
-                    //     var member_name = path.replace(/^groups.[^\.]+.members./, '');
+                        var pat_crfns = psub.get('rules.'+rule);
+                        var pat_crfn = pat([psub.get('rules.'+rule+'.fn')]);
+                        var pat_crfn_on_created = pat([psub.get('rules.'+rule+'.fn_on_created')]);
+
+                        if(pat_crfn_on_created.typeof == 'function'){
+                            var cr_on_created = pat_crfn_on_created.val;
+                            cr_on_created( null, { args: args, fns: pat_crfns });
+                        }
+
+                        if(pat_crfn.typeof == 'function'){
+                            var cr_fn = pat_crfn.val;
+                            cr_fn( null, { args: args, fns: pat_crfns });
+                        }
                         
-                    //     var group = s.get(path.replace(/^groups.[^\.]+/), '');
-                    //     var member = s.get(path.replace(/^groups.[^\.]+.members.[^\.]+$/), '');
-                    //     if(val){ // member added
-                    //     }
-                    //     else { // member removed
-                    //     }
-                    // });
-                }
-                
-                var lp = {};
+                    },
+                    rule_unbind: function(args){
+                        var s = this;
+                        var psub = s.sub;
+                        var pat = jk.pathval_and_typeof;
+
+                        var rule = args.rule;
+
+                        var pat_crfns = psub.get('rules.'+rule);
+                        var pat_crfn_on_deleted = pat([psub.get('rules.'+rule+'.fn_on_deleted')]);
+
+                        if(pat_crfn_on_deleted.typeof == 'function'){
+                            var cr_on_deleted = pat_crfn_on_deleted.val;
+                            cr_on_deleted( null, { args: args, fns: pat_crfns });
+                        }
+
+                        var sub = args.sub;
+                        var sub_rules = sub.get('rules');
+                        var pat_cur_calc_rule = pat([sub_rules, rule]);
+                        if(pat_cur_calc_rule.typeof == 'object'){
+                            delete sub_rules['rule'];
+                            sub.set('rules', sub.get('rules'));
+                        }
+                    },
+                };
 
                 if(env.browser){
-                    var canvas = document.createElement('canvas');
-                    var ctx = canvas.getContext('2d');
-                    // var t =  ctx.measureText("test"); // t.width
-                    // ctx.font = "48px serif";
-                    // ctx.fillText("Hello world", 10, 50);
-                    // ctx.strokeText("Hello world", 10, 50);
-                    lp = {
-                        canvas: canvas,
-                        ctx: ctx,
-                        measure_text: function(text, options){
-                            var options = options || {};
-                            var rules = options.rules || {};                            
-                            var word_type = rules.word_type || 'space_break';
-                            var font = rules.font || '16px serif';
+                    lp.canvas = document.createElement('canvas');
+                    lp.ctx = lp.canvas.getContext('2d');
+                    lp.measure_text = function measure_text(text, options){
+                        var options = options || {};
+                        var rules = options.rules || {};                            
+                        var word_type = rules.word_type || 'space_break';
+                        var font = rules.font || '16px serif';
 
-                            var height;
+                        var height;
 
-                            var ctx = this.ctx;
-                            ctx.font = font;
-                            
-                            var res;
+                        var ctx = this.ctx;
+                        ctx.font = font;
+                        
+                        var res;
 
-                            if(word_type == 'space_break'){
-                                var words = text.split(' ');
+                        if(word_type == 'space_break'){
+                            var words = text.split(' ');
 
-                                //ctx.measureText();
-                            }
-
-                            return res;
+                            //ctx.measureText();
                         }
-                    };
+
+                        return res;
+                    }
                 }
 
                 Layout.prototype = lp;
 
+                
+                // s.on(/^groups.[^\.]+.members.[^\.]+$/gm, function(e){
+                //     var path = e.paths[0];
+                //     var val = s.get(path);
+
+                //     var group_name = path.replace(/^groups.|.members.[^\.]+$/g, '');
+                //     var member_name = path.replace(/^groups.[^\.]+.members./, '');
+                    
+                //     var group = s.get(path.replace(/^groups.[^\.]+/), '');
+                //     var member = s.get(path.replace(/^groups.[^\.]+.members.[^\.]+$/), '');
+                //     if(val){ // member added
+                //     }
+                //     else { // member removed
+                //     }
+                // });
+
                 return Layout;
             })(),
 
+            __init__: function(){
+                jSynk.prototype.fn = jSynk.prototype; 
+
+                jk.cias.prototype.__init__();
+                jk.huid.prototype.__init__();                
+                jk.Depender.prototype.__init__();
+                jk.Layout.prototype.__init__();
+
+                delete jSynk.prototype.__init__;
+            },
 
         };
 
         var jk = new jSynk();
-
-        jk.cias.prototype._instance = new jk.cias()['_instance'];
-        var huid_p = jk.huid.prototype;
-        huid_p.start_time_str = huid_p.get_start_time_str();
-        jSynk.prototype.fn = jSynk.prototype;
-
-        jk.proto_merge([jk.jSub, jk.Depender]);
-        jk.proto_merge([jk.jSub, jk.Layout]);
+        
+        jk.__init__();
         
         return jk;
     })();

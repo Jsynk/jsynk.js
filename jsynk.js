@@ -247,10 +247,16 @@
                 return ret_val;
             },
 
-            pathval: function pathval(paths, options) {
-                var options = options || {};
-                var paths_type = jk.typeof(paths);
+            pathval: function pathval(a0, a1) {
+                var options_type = jk.typeof(a1);                
+                var options = options_type == 'object' ? options : {};
+                var paths = a0;                
+                var paths_type = jk.typeof(a0);
                 var ret_val;
+                if (paths_type == 'object' && options_type == 'string') {
+                    paths = [a0, a1];
+                    paths_type = 'array';
+                }
                 if (paths_type == 'array') {
                     var parent, prop_path;
                     var cur_val = paths[0];
@@ -263,11 +269,20 @@
                     }
                     var has_prop = cur_val != null;
                     for (var i = start_val; i < paths.length; i++) {
-                        var LI = paths[i];
-                        if (cur_val != null && cur_val.hasOwnProperty(LI)) {
+                        var li = paths[i];
+                        if (cur_val != null && (cur_val.hasOwnProperty(li) || (cur_val.__proto__ && cur_val.__proto__.hasOwnProperty(li)))) {
                             parent = cur_val;                            
-                            cur_val = cur_val[LI];
+                            cur_val = cur_val[li];
                             has_prop = true;
+                        }
+                        else if(cur_val != null && li.indexOf('.') != -1){
+                            var splits = li.split('.');
+                            if (cur_val != null && (cur_val.hasOwnProperty(splits[0]) || (cur_val.__proto__ && cur_val.__proto__.hasOwnProperty(splits[0])))) {
+                                parent = cur_val;                            
+                                cur_val = cur_val[splits[0]];
+                                has_prop = true;
+                                paths = paths.slice(0, i).concat(splits).concat(paths.slice(i+1));
+                            }
                         }
                         else {
                             cur_val = undefined;
@@ -291,7 +306,7 @@
             pathval_and_typeof: function pathval_and_typeof(paths, options){
                 var ret_val;
 
-                var val = jk.pathval(paths);
+                var val = jk.pathval(paths, options);
                 var val_typeof = jk.typeof(val);
 
                 ret_val = {
@@ -495,7 +510,7 @@
                 return ret_val;
             },
 
-
+            // check for solution for recursive loop exceeded limit
             jSub: (function(){
                 function jSub(args) {
                     var args = args || {};
@@ -695,7 +710,135 @@
                                 }
                             }
                             if (get_diffs) {
-                                this.get_from_diffs({
+
+                                // get from diffs
+                                var from_diffs = [{
+                                    'path': path,
+                                    'f': cur_val,
+                                    't': value,
+                                    'indexes': cur_indexes,
+                                    'child_indexes': cur_child_indexes,
+                                    'str_indexes': cur_str_indexes,
+                                    'change_indexes': cur_changes_indexes,
+                                }];
+                                for (var i = 0; i < from_diffs.length; i++) {
+                                    var args = from_diffs[i];
+                                    var pv = jk.pathval;
+
+                                    var loop_path = args.path;
+                                    var path_index = args.path_index || '';
+                                    var parent_path = args.parent_path || '';
+                                    var f = args.f;
+                                    var t = args.t;
+                                    var indexes = args.indexes;
+                                    var child_indexes = args.child_indexes;
+                                    var str_indexes = args.str_indexes;
+                                    var change_indexes = args.change_indexes;
+                                    var ignore_js_type = jk.typeof(ignore);
+
+                                    var cur_rev_change = rev.changes[rev.current];
+                                    var crc_indexes = pv([cur_rev_change,'indexes']);
+                                    var crc_child_indexes = pv([cur_rev_change,'child_indexes']);
+                                    var crc_str_indexes = pv([cur_rev_change,'str_indexes']);
+
+                                    var f_str, t_str, vals_is_same;
+
+                                    if (indexes && !indexes.hasOwnProperty(loop_path)) {
+                                        indexes[loop_path] = t;
+                                        if(crc_str_indexes){
+                                            f_str = crc_str_indexes[loop_path] || jk.stringify();
+                                        }
+                                        if(!f_str){
+                                            f_str = jk.stringify(f,{recursive:false});
+                                        }
+                                        t_str = jk.stringify(t,{recursive:false});
+                                        vals_is_same = f_str == t_str;
+                                        if (!vals_is_same) {
+                                            if (change_indexes) {
+                                                change_indexes.paths.push(loop_path);
+                                                change_indexes.path_indexes[loop_path] = true;
+                                                if (change_indexes.path_str_indexes) {
+                                                    change_indexes.path_str_indexes[loop_path] = {
+                                                        same:jk.stringify(t,{recursive:false}),
+                                                        recursive:jk.stringify(t)
+                                                    };
+                                                }
+                                            }
+                                            if(str_indexes){
+                                                if(t_str != 'undefined'){
+                                                    str_indexes[loop_path] = t_str;
+                                                }
+                                            }
+                                            if(max_history == 0){
+                                                if(crc_indexes){
+                                                    if(t_str != 'undefined'){
+                                                        crc_indexes[loop_path] = t;
+                                                    }
+                                                    else {
+                                                        delete crc_indexes[loop_path];
+                                                    }
+                                                }
+                                                if(crc_child_indexes){
+                                                    if(t_str != 'undefined'){
+                                                        //crc_child_indexes[loop_path] = t_str;
+                                                    }
+                                                    else {
+                                                        delete crc_child_indexes[parent_path][path_index];
+                                                        delete crc_child_indexes[loop_path];
+                                                    }
+                                                }
+                                                if(crc_str_indexes){
+                                                    if(t_str != 'undefined'){
+                                                        crc_str_indexes[loop_path] = t_str;
+                                                    }
+                                                    else {
+                                                        delete crc_str_indexes[loop_path];
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    var t_loopable = jk.is_loopable(t);
+                                    var fc_list = f;
+                                    if(crc_child_indexes && crc_child_indexes[loop_path]){
+                                        fc_list = crc_child_indexes[loop_path];
+                                    }
+                                    var f_loopable = jk.is_loopable(fc_list);
+                                    if (f_loopable) {
+                                        for (var fc_index in fc_list) {
+                                            var fc = fc_list[fc_index];
+                                            var fc_path = loop_path ? loop_path + '.' + fc_index : fc_index;
+                                            var continue_search = true;
+                                            if (ignore_js_type == 'regexp') {
+                                                if (ignore.test(fc_index)) {
+                                                    continue_search = false;
+                                                }
+                                            }
+                                            else if (ignore === fc_index) {
+                                                continue_search = false;
+                                            }
+                                            if (continue_search) {
+                                                var tc = t_loopable ? t[fc_index] : undefined;
+
+                                                from_diffs.push({
+                                                    'path': fc_path,
+                                                    'parent_path': loop_path,
+                                                    'path_index': fc_index,
+                                                    'f': fc,
+                                                    't': tc,
+                                                    'indexes': indexes,
+                                                    'child_indexes': child_indexes,
+                                                    'str_indexes': str_indexes,
+                                                    'instance': instance,
+                                                    'ignore': ignore,
+                                                    'change_indexes': change_indexes
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                                // get to diffs
+                                var to_diffs = [{
                                     'path': path,
                                     'f': cur_val,
                                     't': value,
@@ -704,21 +847,116 @@
                                     'str_indexes': cur_str_indexes,
                                     'change_indexes': cur_changes_indexes,
                                     'instance': instance,
-                                    'ignore': ignore
-                                });
-                                this.get_to_diffs({
-                                    'path': path,
-                                    'f': cur_val,
-                                    't': value,
-                                    'indexes': cur_indexes,
-                                    'child_indexes': cur_child_indexes,
-                                    'str_indexes': cur_str_indexes,
-                                    'change_indexes': cur_changes_indexes,
-                                    'instance': instance,
-                                    'ignore': ignore
-                                });
+                                    'ignore': ignore,
+                                }];
+                                for (var i = 0; i < to_diffs.length; i++) {
+                                    var args = to_diffs[i];
+                                    var pv = jk.pathval;
+
+                                    var loop_path = args.path;
+                                    // var path_index = args.path_index;
+                                    var f = args.f;
+                                    var t = args.t;
+                                    var indexes = args.indexes;
+                                    var child_indexes = args.child_indexes;
+                                    var str_indexes = args.str_indexes;
+                                    var change_indexes = args.change_indexes;                        
+                                    var ignore_js_type = jk.typeof(ignore);
+
+                                    var cur_rev_change = rev.changes[rev.current];
+                                    var crc_indexes = pv([cur_rev_change,'indexes']);
+                                    var crc_str_indexes = pv([cur_rev_change,'str_indexes']);
+
+                                    if(child_indexes && !child_indexes[loop_path]){
+                                        child_indexes[loop_path] = {};
+                                    }
+
+                                    if (indexes && !indexes.hasOwnProperty(loop_path)) {
+                                        indexes[loop_path] = t;
+                                        var f_str = undefined;
+                                        if(crc_str_indexes){
+                                            f_str = crc_str_indexes[loop_path] || jk.stringify();
+                                        }
+                                        if(!f_str){
+                                            f_str = jk.stringify(f,{recursive:false});
+                                        }
+                                        var t_str = jk.stringify(t,{recursive:false});
+                                        var vals_is_same = f_str == t_str;
+                                        if (!vals_is_same) {
+                                            if (change_indexes) {
+                                                change_indexes.paths.push(loop_path);
+                                                change_indexes.path_indexes[loop_path] = true;
+                                                if (change_indexes.path_str_indexes) {
+                                                    change_indexes.path_str_indexes[loop_path] = {
+                                                        same:jk.stringify(t,{recursive:false}),
+                                                        recursive:jk.stringify(t),
+                                                    };
+                                                }
+                                            }
+                                            if(str_indexes){
+                                                str_indexes[loop_path] = t_str;
+                                            }
+                                            if(max_history == 0){
+                                                if(crc_indexes){
+                                                    if(t_str != 'undefined'){
+                                                        crc_indexes[loop_path] = t;
+                                                    }
+                                                    else {
+                                                        delete crc_indexes[loop_path];
+                                                    }
+                                                }
+                                                if(crc_str_indexes){
+                                                    if(t_str != 'undefined'){
+                                                        crc_str_indexes[loop_path] = t_str;
+                                                    }
+                                                    else {
+                                                        delete crc_str_indexes[loop_path];
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    var t_loopable = jk.is_loopable(t);
+                                    if (t_loopable) {
+                                        for (var tc_index in t) {
+                                            var tc = t[tc_index];
+                                            var tc_path = loop_path ? loop_path + '.' + tc_index : tc_index;
+                                            var continue_search = true;
+                                            if (ignore_js_type == 'regexp') {
+                                                if (ignore.test(tc_index)) {
+                                                    continue_search = false;
+                                                }
+                                            }
+                                            else if (ignore === tc_index) {
+                                                continue_search = false;
+                                            }
+                                            if (continue_search) {
+                                                var fc = this.get({
+                                                    'path': tc_path,
+                                                    'instance': instance
+                                                });
+                                                to_diffs.push({
+                                                    'path': tc_path,
+                                                    // 'parent_path': loop_path,
+                                                    // 'path_index': tc_index,
+                                                    'f': fc,
+                                                    't': tc,
+                                                    'indexes': indexes,
+                                                    'child_indexes': child_indexes,
+                                                    'str_indexes': str_indexes,
+                                                    'instance': instance,
+                                                    'ignore': ignore,
+                                                    'change_indexes': change_indexes
+                                                });
+                                                if(child_indexes && !child_indexes[loop_path][tc_index]){
+                                                    child_indexes[loop_path][tc_index] = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            cur_changes_indexes.text_indexes = cur_changes_indexes.paths.join('\n')
+                            cur_changes_indexes.text_indexes = cur_changes_indexes.paths.join('\n');
 
                             if (cur_changes_indexes.paths.length > 0) {
 
@@ -911,234 +1149,7 @@
                             }
                         }
                     },
-                    get_from_diffs: function get_from_diffs(args) {
-                        var pv = jk.pathval;
 
-                        var path = args.path;
-                        var path_index = args.path_index || '';
-                        var parent_path = args.parent_path || '';
-                        var f = args.f;
-                        var t = args.t;
-                        var indexes = args.indexes;
-                        var child_indexes = args.child_indexes;
-                        var str_indexes = args.str_indexes;
-                        var change_indexes = args.change_indexes;
-                        var instance = args.instance || this._instance;
-                        var ignore = args.ignore || instance.ignore || /^p_ignore$/;
-                        var ignore_js_type = jk.typeof(ignore);
-
-                        var rev = instance.rev;
-                        var max_history = rev.max_history;
-                        var cur_rev_change = rev.changes[rev.current];
-                        var crc_indexes = pv([cur_rev_change,'indexes']);
-                        var crc_child_indexes = pv([cur_rev_change,'child_indexes']);
-                        var crc_str_indexes = pv([cur_rev_change,'str_indexes']);
-
-                        var f_str, t_str, vals_is_same;
-
-                        if (indexes && !indexes.hasOwnProperty(path)) {
-                            indexes[path] = t;
-                            if(crc_str_indexes){
-                                f_str = crc_str_indexes[path] || jk.stringify();
-                            }
-                            if(!f_str){
-                                f_str = jk.stringify(f,{recursive:false});
-                            }
-                            t_str = jk.stringify(t,{recursive:false});
-                            vals_is_same = f_str == t_str;
-                            if (!vals_is_same) {
-                                if (change_indexes) {
-                                    change_indexes.paths.push(path);
-                                    change_indexes.path_indexes[path] = true;
-                                    if (change_indexes.path_str_indexes) {
-                                        change_indexes.path_str_indexes[path] = {
-                                            same:jk.stringify(t,{recursive:false}),
-                                            recursive:jk.stringify(t)
-                                        };
-                                    }
-                                }
-                                if(str_indexes){
-                                    if(t_str != 'undefined'){
-                                        str_indexes[path] = t_str;
-                                    }
-                                }
-                                if(max_history == 0){
-                                    if(crc_indexes){
-                                        if(t_str != 'undefined'){
-                                            crc_indexes[path] = t;
-                                        }
-                                        else {
-                                            delete crc_indexes[path];
-                                        }
-                                    }
-                                    if(crc_child_indexes){
-                                        if(t_str != 'undefined'){
-                                            //crc_child_indexes[path] = t_str;
-                                        }
-                                        else {
-                                            delete crc_child_indexes[parent_path][path_index];
-                                            delete crc_child_indexes[path];
-                                        }
-                                    }
-                                    if(crc_str_indexes){
-                                        if(t_str != 'undefined'){
-                                            crc_str_indexes[path] = t_str;
-                                        }
-                                        else {
-                                            delete crc_str_indexes[path];
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        var t_loopable = jk.is_loopable(t);
-                        var fc_list = f;
-                        if(crc_child_indexes && crc_child_indexes[path]){
-                            fc_list = crc_child_indexes[path];
-                        }
-                        var f_loopable = jk.is_loopable(fc_list);
-                        if (f_loopable) {
-                            for (var fc_index in fc_list) {
-                                var fc = fc_list[fc_index];
-                                var fc_path = path ? path + '.' + fc_index : fc_index;
-                                var continue_search = true;
-                                if (ignore_js_type == 'regexp') {
-                                    if (ignore.test(fc_index)) {
-                                        continue_search = false;
-                                    }
-                                }
-                                else if (ignore === fc_index) {
-                                    continue_search = false;
-                                }
-                                if (continue_search) {
-                                    var tc = t_loopable ? t[fc_index] : undefined;
-
-                                    this.get_from_diffs({
-                                        'path': fc_path,
-                                        'parent_path': path,
-                                        'path_index': fc_index,
-                                        'f': fc,
-                                        't': tc,
-                                        'indexes': indexes,
-                                        'child_indexes': child_indexes,
-                                        'str_indexes': str_indexes,
-                                        'instance': instance,
-                                        'ignore': ignore,
-                                        'change_indexes': change_indexes
-                                    });
-                                }
-                            }
-                        }
-                    },
-                    get_to_diffs: function get_to_diffs(args) {
-                        var pv = jk.pathval;
-
-                        var path = args.path;
-                        // var path_index = args.path_index;
-                        var f = args.f;
-                        var t = args.t;
-                        var indexes = args.indexes;
-                        var child_indexes = args.child_indexes;
-                        var str_indexes = args.str_indexes;
-                        var change_indexes = args.change_indexes;                        
-                        var instance = args.instance || this._instance;
-                        var ignore = args.ignore || instance.ignore || /^p_ignore$/;
-                        var ignore_js_type = jk.typeof(ignore);
-
-                        var rev = instance.rev;
-                        var max_history = rev.max_history;
-                        var cur_rev_change = rev.changes[rev.current];
-                        var crc_indexes = pv([cur_rev_change,'indexes']);
-                        var crc_str_indexes = pv([cur_rev_change,'str_indexes']);
-
-                        if(child_indexes && !child_indexes[path]){
-                            child_indexes[path] = {};
-                        }
-
-                        if (indexes && !indexes.hasOwnProperty(path)) {
-                            indexes[path] = t;
-                            var f_str = undefined;
-                            if(crc_str_indexes){
-                                f_str = crc_str_indexes[path] || jk.stringify();
-                            }
-                            if(!f_str){
-                                f_str = jk.stringify(f,{recursive:false});
-                            }
-                            var t_str = jk.stringify(t,{recursive:false});
-                            var vals_is_same = f_str == t_str;
-                            if (!vals_is_same) {
-                                if (change_indexes) {
-                                    change_indexes.paths.push(path);
-                                    change_indexes.path_indexes[path] = true;
-                                    if (change_indexes.path_str_indexes) {
-                                        change_indexes.path_str_indexes[path] = {
-                                            same:jk.stringify(t,{recursive:false}),
-                                            recursive:jk.stringify(t),
-                                        };
-                                    }
-                                }
-                                if(str_indexes){
-                                    str_indexes[path] = t_str;
-                                }
-                                if(max_history == 0){
-                                    if(crc_indexes){
-                                        if(t_str != 'undefined'){
-                                            crc_indexes[path] = t;
-                                        }
-                                        else {
-                                            delete crc_indexes[path];
-                                        }
-                                    }
-                                    if(crc_str_indexes){
-                                        if(t_str != 'undefined'){
-                                            crc_str_indexes[path] = t_str;
-                                        }
-                                        else {
-                                            delete crc_str_indexes[path];
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        var t_loopable = jk.is_loopable(t);
-                        if (t_loopable) {
-                            for (var tc_index in t) {
-                                var tc = t[tc_index];
-                                var tc_path = path ? path + '.' + tc_index : tc_index;
-                                var continue_search = true;
-                                if (ignore_js_type == 'regexp') {
-                                    if (ignore.test(tc_index)) {
-                                        continue_search = false;
-                                    }
-                                }
-                                else if (ignore === tc_index) {
-                                    continue_search = false;
-                                }
-                                if (continue_search) {
-                                    var fc = this.get({
-                                        'path': tc_path,
-                                        'instance': instance
-                                    });
-                                    this.get_to_diffs({
-                                        'path': tc_path,
-                                        // 'parent_path': path,
-                                        // 'path_index': tc_index,
-                                        'f': fc,
-                                        't': tc,
-                                        'indexes': indexes,
-                                        'child_indexes': child_indexes,
-                                        'str_indexes': str_indexes,
-                                        'instance': instance,
-                                        'ignore': ignore,
-                                        'change_indexes': change_indexes
-                                    });
-                                    if(child_indexes && !child_indexes[path][tc_index]){
-                                        child_indexes[path][tc_index] = true;
-                                    }
-                                }
-                            }
-                        }
-                    },
                     on: function on(a0, a1, a2, a3) {
                         var a = jk.get_arguments([a0, a1, a2, a3]);
                         var has_val = false;
@@ -1216,8 +1227,7 @@
                             if (remove) { instance_sub_list.splice(i, 1); }
                         }
                     },
-                    // on_before_set = function(args) {}
-                    // off_before_set = function(args) {}
+                    
 
                     debug: function debug(args){
                         var ns = 'internal_jSub_debugger';
@@ -2121,6 +2131,10 @@
                     }
                     changes.push(change);
                     last_ni = ns.length;
+                }
+
+                if(old_str == '' && new_str != ''){
+                    changes = ['>'+new_str];
                 }
                 
                 var ret_val = changes;

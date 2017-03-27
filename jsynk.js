@@ -349,106 +349,105 @@
                 }
                 return ret_val;
             },
+            // deep copy fix maximum callstack size exceeded limit
             deep_copy: function deep_copy(args) {
                 var args_js_type = jk.typeof(args);
                 var ret_val;
                 if (args_js_type == 'object') {
                     var val = args.val;
-                    var parent = {};
+                    var dc_parent = {};
                     var par_index = 'result';
                     var p_ref_and_ignore = args.p_ref_and_ignore || /^p_ref_and_ignore$/;
                     var p_ignore = args.p_ignore || /^p_ignore$/;
                     var options = jk.typeof(args.options) == 'object' ? args.options : {};
-                    jk.deep_copy_recursive({
+                    var recursions = [{
                         'val': val,
-                        'parent': parent,
+                        'parent': dc_parent,
                         'par_index': par_index,
                         'p_ref_and_ignore': p_ref_and_ignore,
                         'p_ignore': p_ignore,
                         'options': options
-                    });
-                    ret_val = parent['result'];
-                }
-                return ret_val;
-            },
-            deep_copy_recursive: function deep_copy_recursive(args) {
-                var args_js_type = jk.typeof(args);
-                var ret_val;
+                    }];
+                    for (var i = 0; i < recursions.length; i++) {
+                        var args = recursions[i];
+                        var args_js_type = jk.typeof(args);
 
-                if (args_js_type == 'object') {
-                    var val = args.val;
-                    var parent = args.parent;
-                    var par_index = args.par_index;
-                    var p_ref_and_ignore = args.p_ref_and_ignore || /^p_ref_and_ignore$/;
-                    var p_ignore = args.p_ignore || /^p_ignore$/;
-                    var level = args.level || 0;
-                    var val_js_type = jk.typeof(val);
-                    var reference = false;
-                    var ignore = false;
-                    var ignore_only = jk.is_index_match({
-                        'index': par_index,
-                        'match': p_ignore
-                    });
-                    if (ignore_only) {
-                        ignore = false;
-                    }
-                    var ref_and_ignore = jk.is_index_match({
-                        'index': par_index,
-                        'match': p_ref_and_ignore
-                    });
-                    if (ref_and_ignore) {
-                        reference = true;
-                        ignore = true;
-                    }
-                    if (!ignore) {
-                        switch (val_js_type) {
-                            case 'object':
-                                parent[par_index] = {};
-                                for (var i in val) {
-                                    var v = val[i];
-                                    jk.deep_copy_recursive({
-                                        'val': v,
-                                        'parent': parent[par_index],
-                                        'par_index': i,
-                                        'p_ref_and_ignore': p_ref_and_ignore,
-                                        'p_ignore': p_ignore,
-                                        'level': level + 1
-                                    });
+                        if (args_js_type == 'object') {
+                            var val = args.val;
+                            var parent = args.parent;
+                            var par_index = args.par_index;
+                            var level = args.level || 0;
+                            var val_js_type = jk.typeof(val);
+                            var reference = false;
+                            var ignore = false;
+                            var ignore_only = jk.is_index_match({
+                                'index': par_index,
+                                'match': p_ignore
+                            });
+                            if (ignore_only) {
+                                ignore = false;
+                            }
+                            var ref_and_ignore = jk.is_index_match({
+                                'index': par_index,
+                                'match': p_ref_and_ignore
+                            });
+                            if (ref_and_ignore) {
+                                reference = true;
+                                ignore = true;
+                            }
+                            if (!ignore) {
+                                switch (val_js_type) {
+                                    case 'object':
+                                        parent[par_index] = {};
+                                        for (var j in val) {
+                                            var v = val[j];
+                                            recursions.push({
+                                                'val': v,
+                                                'parent': parent[par_index],
+                                                'par_index': j,
+                                                'p_ref_and_ignore': p_ref_and_ignore,
+                                                'p_ignore': p_ignore,
+                                                'level': level + 1
+                                            });
+                                        }
+                                        break;
+                                    case 'array':
+                                        parent[par_index] = [];
+                                        for (var k = 0; k < val.length; k++) {
+                                            var v = val[k];
+                                            parent[par_index].push(false);
+                                            recursions.push({
+                                                'val': v,
+                                                'parent': parent[par_index],
+                                                'par_index': k,
+                                                'p_ref_and_ignore': p_ref_and_ignore,
+                                                'p_ignore': p_ignore,
+                                                'level': level + 1
+                                            });
+                                        }
+                                        break;
+                                    case 'function':
+                                        parent[par_index] = jk.parse(val.toString());
+                                        break;
+                                    case 'date':
+                                        parent[par_index] = new Date(val.getTime())
+                                        break;
+                                    case 'regexp':
+                                        parent[par_index] = jk.parse(val.toString());
+                                        break;
+                                    default:
+                                        parent[par_index] = val;
+                                        break;
                                 }
-                                break;
-                            case 'array':
-                                parent[par_index] = [];
-                                for (var i = 0; i < val.length; i++) {
-                                    var v = val[i];
-                                    parent[par_index].push(false);
-                                    jk.deep_copy_recursive({
-                                        'val': v,
-                                        'parent': parent[par_index],
-                                        'par_index': i,
-                                        'p_ref_and_ignore': p_ref_and_ignore,
-                                        'p_ignore': p_ignore,
-                                        'level': level + 1
-                                    });
-                                }
-                                break;
-                            case 'function':
-                                parent[par_index] = jk.parse(val.toString());
-                                break;
-                            case 'date':
-                                parent[par_index] = new Date(val.getTime())
-                                break;
-                            case 'regexp':
-                                parent[par_index] = jk.parse(val.toString());
-                                break;
-                            default:
+                            }
+                            else if (reference) {
                                 parent[par_index] = val;
-                                break;
+                            }
                         }
                     }
-                    else if (reference) {
-                        parent[par_index] = val;
-                    }
+                    ret_val = dc_parent['result'];
                 }
+                return ret_val;
             },
             is_index_match: function is_index_match(args) {
                 var args_js_type = jk.typeof(args);
@@ -457,9 +456,9 @@
                     var index = args.index;
                     var match = args.match || /^match$/;
 
-                    var match_js_type = jk.type(match);
+                    var match_js_type = jk.typeof(match);
 
-                    if (match_js_type == 'RegExp') {
+                    if (match_js_type == 'regexp') {
                         ret_val = match.test(index);
                     }
                     else {
@@ -510,7 +509,6 @@
                 return ret_val;
             },
 
-            // check for solution for recursive loop exceeded limit
             jSub: (function(){
                 function jSub(args) {
                     var args = args || {};
@@ -638,6 +636,8 @@
 
                         if (has_val) {
 
+                            var pv = jk.pathval;
+
                             var rev = instance.rev;
                             var changes = rev.changes;
 
@@ -671,7 +671,7 @@
                                 cur_child_indexes = {};
                             }
 
-                            var min_diffs = jk.pathval([instance,'args','min_diffs']);
+                            var min_diffs = pv([instance,'args','min_diffs']);
                             if (min_diffs) {
                                 cur_changes_indexes['path_str_indexes'] = {};
                             }
@@ -711,35 +711,31 @@
                             }
                             if (get_diffs) {
 
+                                var indexes = cur_indexes;
+                                var child_indexes = cur_child_indexes;
+                                var str_indexes = cur_str_indexes;
+                                var change_indexes = cur_changes_indexes;
+                                var ignore_js_type = jk.typeof(ignore);
+
+                                var cur_rev_change = rev.changes[rev.current];
+                                var crc_indexes = pv([cur_rev_change,'indexes']);
+                                var crc_child_indexes = pv([cur_rev_change,'child_indexes']);
+                                var crc_str_indexes = pv([cur_rev_change,'str_indexes']);
+
                                 // get from diffs
                                 var from_diffs = [{
                                     'path': path,
                                     'f': cur_val,
                                     't': value,
-                                    'indexes': cur_indexes,
-                                    'child_indexes': cur_child_indexes,
-                                    'str_indexes': cur_str_indexes,
-                                    'change_indexes': cur_changes_indexes,
                                 }];
                                 for (var i = 0; i < from_diffs.length; i++) {
                                     var args = from_diffs[i];
-                                    var pv = jk.pathval;
 
                                     var loop_path = args.path;
                                     var path_index = args.path_index || '';
                                     var parent_path = args.parent_path || '';
                                     var f = args.f;
                                     var t = args.t;
-                                    var indexes = args.indexes;
-                                    var child_indexes = args.child_indexes;
-                                    var str_indexes = args.str_indexes;
-                                    var change_indexes = args.change_indexes;
-                                    var ignore_js_type = jk.typeof(ignore);
-
-                                    var cur_rev_change = rev.changes[rev.current];
-                                    var crc_indexes = pv([cur_rev_change,'indexes']);
-                                    var crc_child_indexes = pv([cur_rev_change,'child_indexes']);
-                                    var crc_str_indexes = pv([cur_rev_change,'str_indexes']);
 
                                     var f_str, t_str, vals_is_same;
 
@@ -826,12 +822,6 @@
                                                     'path_index': fc_index,
                                                     'f': fc,
                                                     't': tc,
-                                                    'indexes': indexes,
-                                                    'child_indexes': child_indexes,
-                                                    'str_indexes': str_indexes,
-                                                    'instance': instance,
-                                                    'ignore': ignore,
-                                                    'change_indexes': change_indexes
                                                 });
                                             }
                                         }
@@ -842,30 +832,14 @@
                                     'path': path,
                                     'f': cur_val,
                                     't': value,
-                                    'indexes': cur_indexes,
-                                    'child_indexes': cur_child_indexes,
-                                    'str_indexes': cur_str_indexes,
-                                    'change_indexes': cur_changes_indexes,
-                                    'instance': instance,
-                                    'ignore': ignore,
                                 }];
                                 for (var i = 0; i < to_diffs.length; i++) {
                                     var args = to_diffs[i];
-                                    var pv = jk.pathval;
 
                                     var loop_path = args.path;
                                     // var path_index = args.path_index;
                                     var f = args.f;
                                     var t = args.t;
-                                    var indexes = args.indexes;
-                                    var child_indexes = args.child_indexes;
-                                    var str_indexes = args.str_indexes;
-                                    var change_indexes = args.change_indexes;                        
-                                    var ignore_js_type = jk.typeof(ignore);
-
-                                    var cur_rev_change = rev.changes[rev.current];
-                                    var crc_indexes = pv([cur_rev_change,'indexes']);
-                                    var crc_str_indexes = pv([cur_rev_change,'str_indexes']);
 
                                     if(child_indexes && !child_indexes[loop_path]){
                                         child_indexes[loop_path] = {};
@@ -941,12 +915,6 @@
                                                     // 'path_index': tc_index,
                                                     'f': fc,
                                                     't': tc,
-                                                    'indexes': indexes,
-                                                    'child_indexes': child_indexes,
-                                                    'str_indexes': str_indexes,
-                                                    'instance': instance,
-                                                    'ignore': ignore,
-                                                    'change_indexes': change_indexes
                                                 });
                                                 if(child_indexes && !child_indexes[loop_path][tc_index]){
                                                     child_indexes[loop_path][tc_index] = true;

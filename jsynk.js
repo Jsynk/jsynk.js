@@ -956,23 +956,25 @@
                                         }
                                     }
                                     // merge old refs with new refs
-                                    var old_base = prev_indexes[''];
-                                    var base = jk.deep_copy_same(old_base);
-                                    cur_indexes[''] = base;
-                                    var cur_base_path = '';
-                                    var cur_base_ref = base;
-                                    for (var p_i in paths) {
-                                        var p = paths[p_i];
-                                        cur_base_path = cur_base_path == '' ? p : cur_base_path + '.' + p;
-                                        if (cur_base_path != path) {
-                                            var dcs = jk.deep_copy_same(prev_indexes[cur_base_path]);
-                                            cur_base_ref[p] = dcs;
-                                            cur_base_ref = dcs;
-                                            cur_indexes[cur_base_path] = dcs;
-                                        }
-                                        else {
-                                            cur_base_ref[p] = cur_indexes[path];
-                                            cur_base_ref = cur_indexes[path];
+                                    if(path != ''){
+                                        var old_base = prev_indexes[''];
+                                        var base = jk.deep_copy_same(old_base);
+                                        cur_indexes[''] = base;
+                                        var cur_base_path = '';
+                                        var cur_base_ref = base;
+                                        for (var p_i in paths) {
+                                            var p = paths[p_i];
+                                            cur_base_path = cur_base_path == '' ? p : cur_base_path + '.' + p;
+                                            if (cur_base_path != path) {
+                                                var dcs = jk.deep_copy_same(prev_indexes[cur_base_path]);
+                                                cur_base_ref[p] = dcs;
+                                                cur_base_ref = dcs;
+                                                cur_indexes[cur_base_path] = dcs;
+                                            }
+                                            else {
+                                                cur_base_ref[p] = cur_indexes[path];
+                                                cur_base_ref = cur_indexes[path];
+                                            }
                                         }
                                     }
                                 }

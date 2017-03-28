@@ -737,18 +737,17 @@
                                     var f = args.f;
                                     var t = args.t;
 
-                                    var f_str, t_str, vals_is_same;
-
                                     if (indexes && !indexes.hasOwnProperty(loop_path)) {
                                         indexes[loop_path] = t;
+                                        var f_str = undefined;
                                         if(crc_str_indexes){
                                             f_str = crc_str_indexes[loop_path] || jk.stringify();
                                         }
                                         if(!f_str){
                                             f_str = jk.stringify(f,{recursive:false});
                                         }
-                                        t_str = jk.stringify(t,{recursive:false});
-                                        vals_is_same = f_str == t_str;
+                                        var t_str = jk.stringify(t,{recursive:false});
+                                        var vals_is_same = f_str == t_str;
                                         if (!vals_is_same) {
                                             if (change_indexes) {
                                                 change_indexes.paths.push(loop_path);
@@ -818,8 +817,8 @@
 
                                                 from_diffs.push({
                                                     'path': fc_path,
-                                                    'parent_path': loop_path,
-                                                    'path_index': fc_index,
+                                                    // 'parent_path': loop_path,
+                                                    // 'path_index': fc_index,
                                                     'f': fc,
                                                     't': tc,
                                                 });

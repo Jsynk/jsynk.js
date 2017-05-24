@@ -50,6 +50,182 @@
                 return cur_ref;
             },
             env : env,
+
+
+            load: (function(){
+                function load(args, from){
+                    var s = jk.load.prototype;
+                    var id = args.id;
+                    if(!id){
+                        id = args.id = jk.huid();
+                    }
+                    var path = args.path;
+
+                    var load_request = s.load_requests[path];
+                    if (!load_request) {
+                        load_request = s.load_requests[path] = {
+                            val: null, loaded: false,
+                            dep_ids: {}, dep_ids_len: 0,
+                        };
+                        s.load_requests_len++;
+
+                        var suppliers = s.suppliers;
+                        var agent = new jk.Agent({'catch_error':false});
+                        for (var i = 0; i < suppliers.length; i++) {
+                            var supplier = suppliers[i];
+                            agent.add_mission({
+                                'name':'suppliers','fn': supplier,
+                                'fn_args':args, 'async': true,
+                            });
+                        }
+                        agent.run_missions();
+                    }
+
+                    load_request.dep_ids[id] = true;
+                    load_request.dep_ids_len++;
+
+                    if(from){
+                        var from_id = from.id;
+                        var from_path = from.path;
+
+                        var from_args = s.load_request_args[from_id];
+                        if(from_args){
+                            if(!from_args.to_ids){
+                                from_args.to_ids = {};
+                                from_args.to_ids_len = 0;
+                            }
+                            from_args.to_ids[id] = true;
+                            from_args.to_ids_len++;
+                        }
+
+                        args.from_id = from_id;
+                        args.from_path = from_path;
+                    }
+
+                    s.load_request_args[id] = args;
+
+                    if(load_request.loaded){
+                        var fn = args.fn;
+                        fn(load_request.val);
+                    }
+
+                    return args;
+                }
+                load.prototype = {
+                    suppliers: [
+                        function web_loader(args) {
+                            var agent = this;
+                            var file_path = args.path;
+                            var id = args.id;
+                            var s = jk.load.prototype;
+                            if(jk.env.nodejs){
+                                var module = require(file_path);
+                                if(!module.path){
+                                    module.path = file_path;
+                                }
+                                jk.register(module);
+                            }
+                            else if(jk.env.browser){
+                                var path = args.path;
+
+                                var load_request = s.load_requests[path];
+
+                                var script = document.createElement('script');
+                                script.setAttribute('src', path);
+                                script.async = true;
+                                document.querySelector('head').appendChild(script);
+                                load_request.script = script;
+                            }
+                        }
+                    ],
+                    load_requests: {},
+                    load_requests_len: 0,
+                    load_request_args: {},
+                };
+                return load;
+            })(),
+            unload: (function(){
+                function unload(args) {
+                    var sl = jk.load.prototype;
+                    var path = args.path;
+                    var id = args.id;
+                    var load_request = sl.load_requests[path];
+                    load_request.dep_ids_len--;
+                    delete load_request.dep_ids[id];
+                    if(load_request.dep_ids_len == 0){
+                        if(load_request.req){
+                            load_request.req.abort();
+                        }
+                        if(load_request.val.on_unload){
+                            load_request.val.on_unload(load_request);
+                        }
+                        if(load_request.script){
+                            load_request.script.parentNode.removeChild(load_request.script);
+                        }
+                        delete sl.load_requests[path];
+                        sl.load_requests_len--;
+                    }
+                    delete sl.load_request_args[id];
+
+                    var from_id = args.from_id;
+                    var from_args = sl.load_request_args[from_id];
+                    if(from_args){
+                        delete from_args.to_ids[id];
+                        from_args.to_ids_len--;
+                    }
+
+                    var to_ids = args.to_ids;
+                    for(var tid_i in to_ids){
+                        var tid_args = sl.load_request_args[tid_i];
+                        jk.unload(tid_args)
+                    }
+                }
+                unload.prototype = {};
+                return unload;
+            })(),
+            register: (function(){
+                function register(args){
+                    var sl = jk.load.prototype;
+                    var path = args.path;
+                    if(!path){
+                        var stack_urls = (new Error().stack).match(/https?:[^:]+/g);
+                        if(stack_urls != null && stack_urls.length != 0){
+                            var base_url = location.protocol + '//' + location.host + location.port + '/';
+                            var last_url = stack_urls[stack_urls.length-1].slice(base_url.length).replace(/\?.*$/,'');
+                            path = last_url;
+                        }
+                    }
+
+                    var load_request = sl.load_requests[path];
+                    if(load_request && !load_request.loaded){
+                        load_request.val = args;
+                        load_request.loaded = true;
+
+                        var load_request_args = sl.load_request_args;
+
+                        var dep_ids = load_request.dep_ids;
+                        for(var did_i in dep_ids){
+                            var did = load_request_args[did_i];
+                            if(did && did.fn){
+                                did.fn(load_request.val);
+                            }
+                        }
+                    }
+                    else if(load_request){
+                        var prev_val = load_request.val;
+                        load_request.val = args;
+                        if(args.on_reload){
+                            args.on_reload(load_request, prev_val);
+                        }
+                    }
+
+                    return args;
+                }
+                register.prototype = {};
+                return register;
+            })(),
+
+
             utf8_to_b64: function utf8_to_b64( str ) {
                 if (jk.env['browser']) {
                     return window.btoa(unescape(encodeURIComponent( str )));
@@ -302,7 +478,6 @@
                 }
                 return ret_val;
             },
-
             pathval_and_typeof: function pathval_and_typeof(paths, options){
                 var ret_val;
 
@@ -538,8 +713,7 @@
                     else{
                         return new jk.jSub(args);
                     }
-                }
-                
+                };
                 jSub.prototype = {
                     get: function get(args) {
                         var args_typeof = jk.typeof(args);
@@ -1168,7 +1342,6 @@
                             }
                         }
 
-
                         if (has_val && fn) {
                             instance.sub.list.push({
                                 'path': path,
@@ -1252,8 +1425,7 @@
                         
                         return ns;
                     }
-                }
-
+                };
                 return jSub;
             })(),
             
@@ -1370,103 +1542,6 @@
                 };
 
                 return Agent;
-            })(),
-
-            // recursive removal off old dependencies!
-            // handle recursive circular reference ?
-            Depender: (function(){
-                function Depender(args){
-                    jk.jSub.call(this);
-
-                    var sub = this;
-
-                    sub.set('', { packages: {}, dep_tree: {}, dep_indexes: {} });
-                    sub.on({path: /^packages\..+\.dependencies\..+$/gm, once: true, fn: function (e) {
-                        var paths = e.paths;
-                        var packages = {};
-                        var removed_packages = {};
-                        for(var p_i in paths) {
-                            var p = paths[p_i];
-                            var p_val = sub.get(p);
-                            var package = p.replace(/^packages\.|\.dependencies\..+$/g,'');
-                            packages[package] = '*';
-                            if (!p_val){
-                                var dependicy = p.replace(/^.+dependencies\./,'');
-                                removed_packages[dependicy] = package;
-                            }
-                        }
-                        for(var package_i in packages){
-                            var dep_tree = {};
-                            sub.get_dep_tree_recursive(package_i, dep_tree);
-                            sub.set('dep_tree.'+package_i, dep_tree);
-                        }
-                        for(var rp_i in removed_packages){
-                            var rp = removed_packages[rp_i];
-
-                            var rp_di = sub.get('dep_indexes.' + rp);
-                            for(var rp_di_li_i in rp_di){
-                                var rp_di_li = rp_di[rp_di_li_i];
-                                if(!packages[rp_di_li_i]){
-                                    var dep_tree = {};
-                                    sub.get_dep_tree_recursive(rp_di_li_i, dep_tree);
-                                    sub.set('dep_tree.'+rp_di_li_i, dep_tree);
-                                }
-                            }
-                        }
-                    }});
-
-                    sub.on(/^dep_tree.+\..+$/gm, function (e) {
-                        var path = e.paths[0];
-                        var val = sub.get(path);
-                        var dep_tree = path.replace(/^dep_tree.|\..+/g,'');
-                        var dep_index = path.replace(/^dep_tree.+\./,'');
-
-                        var dep_index_val = sub.get('dep_indexes.'+dep_index);
-                        if (val){
-                            if(!dep_index_val){
-                                sub.set('dep_indexes.'+dep_index, {});
-                            }
-                            sub.set(['dep_indexes.',dep_index,'.',dep_tree].join(''), val);
-                        }
-                        else {
-                            var dc_div = jk.deep_copy({ val: dep_index_val });
-                            delete dc_div[dep_tree];
-
-                            var prop_len = 0;
-                            for(var p_i in dc_div){
-                                prop_len++;
-                            }
-                            if(prop_len != 0){
-                                sub.set('dep_indexes.'+dep_index, dc_div);
-                            }
-                            else {
-                                var dc_di = jk.deep_copy({ val: sub.get('dep_indexes') });
-                                delete dc_di[dep_index];
-                                sub.set('dep_indexes', dc_di);
-                            }
-                        }
-                    });
-
-                }
-                Depender.prototype = {
-                    get_dep_tree_recursive: function get_dep_tree_recursive(package, tree) {
-                        var package_dependencies = this.get('packages.'+ package +'.dependencies');
-                        for(var d_i in package_dependencies){
-                            var d = package_dependencies[d_i];
-                            if (!tree[d_i]) {
-                                tree[d_i] = d;
-                                this.get_dep_tree_recursive(d_i, tree);
-                            }
-                        }
-                    },
-                    __init__: function(){
-                        jk.proto_merge([jk.jSub, jk.Depender]);
-
-                        delete jk.Depender.prototype.__init__;
-                    }
-                };
-                
-                return Depender;
             })(),
 
             Animator: (function(){
@@ -1880,8 +1955,12 @@
 
                 return jMarkup;
             })(),
-            // arg fn parse does not work async, add support?
             
+            js_to_html: function js_to_html(args) {
+                return jk.jMarkup.prototype.parse(args);
+            },
+
+
             jStylist: (function(){
                 // Add , splitter + nesting?
                 function jStylist(args) {}
@@ -1965,7 +2044,9 @@
                 return jStylist;
             })(),
             
-
+            js_to_css: function js_to_css(args) {
+                return jk.jStylist.prototype.parse(args);
+            },
 
             diff: function diff( old_str, new_str, options) {
                 var options = jk.typeof(options) == 'object' ? options : {};
@@ -2169,43 +2250,50 @@
                 return ret_val;
             },
 
-            Async: (function(){
-                function Async(args){
-                    var s = this;
-                    if (jk.instance_of(s, jk.jSub)){
-                    
-                    }
-                    else {
-                        
+            async_recursive: function() {
+                var complete = args.complete;
+                var call = {
+                    checks: 0,
+                    wait: function(){ call.checks++; },
+                    done: function(){
+                        if (call.checks != 0){
+                            call.checks--; call.check(); 
+                        }
+                    },
+                    check: function(){
+                        if (call.checks == 0) {
+                            complete();
+                        }
                     }
                 }
-                
-                Async.prototype = {
-                    recursive: function recursive(args){
-                        var complete = args.complete;
-                        var call = {
-                            checks: 0,
-                            wait: function(){ call.checks++; },
-                            done: function(){
-                                if (call.checks != 0){
-                                    call.checks--; call.check(); 
-                                }
-                            },
-                            check: function(){
-                                if (call.checks == 0) {
-                                    complete();
-                                }
-                            }
+                return call;
+            },
+            async_parallel: function(args) {
+                var complete = args.complete;
+                var call = {
+                    checks: 0,
+                    done: function(){
+                        if (call.checks != 0){
+                            call.checks--; call.check(); 
                         }
-                        return call;
                     },
-                    pararell: function pararell(){
-                        // TODO - use multiple Agents?
+                    check: function(){
+                        if (call.checks == 0) {
+                            complete();
+                        }
                     }
-                };
-
-                return Async;
-            })(),
+                }
+                var fns = args.fns;
+                for (var i = 0; i < fns.length; i++) {
+                    var fn = fns[i];
+                    call.checks++;
+                }
+                for (var i = 0; i < fns.length; i++) {
+                    var fn = fns[i];
+                    fn();
+                }
+                return call;
+            },
 
             Layout: (function(){
                 function Layout(){
@@ -2476,7 +2564,6 @@
 
                 jk.cias.prototype.__init__();
                 jk.huid.prototype.__init__();                
-                jk.Depender.prototype.__init__();
                 jk.Layout.prototype.__init__();
 
                 delete jSynk.prototype.__init__;

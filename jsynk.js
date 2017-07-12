@@ -113,13 +113,13 @@
                 }
                 load.prototype = {
                     suppliers: [
-                        function web_loader(args) {
+                        function file_loader(args) {
                             var agent = this;
                             var file_path = args.path;
                             var id = args.id;
                             var s = jk.load.prototype;
                             if(jk.env.nodejs){
-                                var module = require(file_path);
+                                var module = args.require ? args.require(file_path): s.require(file_path);
                                 if(!module.path){
                                     module.path = file_path;
                                 }
@@ -188,11 +188,15 @@
                     var sl = jk.load.prototype;
                     var path = args.path;
                     if(!path){
-                        var stack_urls = (new Error().stack).match(/https?:[^:]+/g);
-                        if(stack_urls != null && stack_urls.length != 0){
-                            var base_url = location.protocol + '//' + location.host + location.port + '/';
-                            var last_url = stack_urls[stack_urls.length-1].slice(base_url.length).replace(/\?.*$/,'');
-                            path = last_url;
+                        if(jk.env.browser){
+                            var stack = new Error().stack;
+                            var stack_urls = stack.match(/http?[^)]+/g);
+                            if(stack_urls != null && stack_urls.length != 0){
+                                var base_url = location.protocol + '//' + location.host + location.port + '/';
+                                var last_full_url = stack_urls[stack_urls.length-1].replace(/:\d+:\d+$/, '');
+                                var last_url = last_full_url.slice(base_url.length).replace(/\?.*$/,'');
+                                path = last_url;
+                            }
                         }
                     }
 
@@ -451,7 +455,7 @@
                             cur_val = cur_val[li];
                             has_prop = true;
                         }
-                        else if(cur_val != null && li.indexOf('.') != -1){
+                        else if(cur_val != null && typeof(li) == 'string' && li.indexOf('.') != -1){
                             var splits = li.split('.');
                             if (cur_val != null && (cur_val.hasOwnProperty(splits[0]) || (cur_val.__proto__ && cur_val.__proto__.hasOwnProperty(splits[0])))) {
                                 parent = cur_val;                            
@@ -1429,7 +1433,6 @@
                 return jSub;
             })(),
             
-            
             Agent: (function(){
                 function Agent(options){
                     var s = this;
@@ -1955,11 +1958,9 @@
 
                 return jMarkup;
             })(),
-            
             js_to_html: function js_to_html(args) {
                 return jk.jMarkup.prototype.parse(args);
             },
-
 
             jStylist: (function(){
                 // Add , splitter + nesting?
@@ -2043,7 +2044,6 @@
 
                 return jStylist;
             })(),
-            
             js_to_css: function js_to_css(args) {
                 return jk.jStylist.prototype.parse(args);
             },
@@ -2250,7 +2250,7 @@
                 return ret_val;
             },
 
-            async_recursive: function() {
+            async_recursive: function(args) {
                 var complete = args.complete;
                 var call = {
                     checks: 0,
@@ -2568,7 +2568,6 @@
 
                 delete jSynk.prototype.__init__;
             },
-
         };
 
         var jk = new jSynk();

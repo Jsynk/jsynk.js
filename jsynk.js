@@ -51,6 +51,84 @@
             },
             env : env,
 
+            get: (function() {
+                function get(ref, type, options) {
+                    var s = jk.get.prototype;
+                    var ret_val = undefined;
+                    if(jk.typeof(s.types[type]) == 'function'){
+                        ret_val == s.types[type](ref, type, options);
+                    }
+                    else {
+                        ret_val = jk.pathval(ref, type);
+                    }
+                    return ret_val;
+                }
+                get.prototype = {
+                    types:{},
+                };
+                return get;
+            })(),
+            is: (function() {
+                function is(ref, type, options) {
+                    var s = jk.is.prototype;
+                    var valid = false;
+                    if(jk.typeof(s.types[type]) == 'function'){
+                        valid == s.types[type](ref, type, options);
+                    }
+                    else {
+                        valid = jk.typeof(ref) == type;
+                    }
+                    return valid;
+                }
+                is.prototype = {
+                    types: {},
+                };
+                return is;
+            })(),
+            validate: (function() {
+                function validate(ref, props, options) {
+                    var options = options || {};
+                    var s = jk.validate.prototype;
+                    var valid_count = 0;
+                    var error_count = 0;
+                    var vals = {};
+                    var error_info = {};
+                    for(var p_i in props){
+                        var p = props[p_i];
+                        var val = vals[p_i] = jk.get(ref, p_i);
+                        var is_valid = jk.is(val, p);
+                        if(is_valid){
+                            valid_count++;
+                        }
+                        else {
+                            error_count++;
+                            if(options.info){
+                                error_info[p_i] = p;
+                            }
+                            else {
+                                break;
+                            }
+                        }
+                    }
+
+                    var valid = valid_count != 0 && error_count == 0;
+                    var ret_val = null;
+                    if(options.info){
+                        ret_val = { 
+                            vals: vals, 
+                            valid_count: valid_count, error_count, 
+                            error_info: error_info 
+                        };
+                    }
+                    else if(valid){
+                        ret_val = vals;
+                    }
+                    return ret_val;
+                }
+                validate.prototype = {
+                };
+                return validate;
+            })(),
 
             load: (function(){
                 function load(args, from){
@@ -133,6 +211,11 @@
                                 var script = document.createElement('script');
                                 script.setAttribute('src', path);
                                 script.async = true;
+                                script.onload = function() {
+                                    if(load_request && load_request.loaded === false){
+                                        jk.register({path:path});
+                                    }
+                                }
                                 document.querySelector('head').appendChild(script);
                                 load_request.script = script;
                             }
@@ -744,6 +827,14 @@
                                     if (rev_indexes.hasOwnProperty(path)) {
                                         ret_val = rev_indexes[path];
                                     }
+                                    else {
+                                        if(path == ''){
+                                            ret_val = rev_indexes;
+                                        }
+                                        else{
+                                            ret_val = jk.pathval(rev_indexes, path);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -830,6 +921,8 @@
                                 path = paths.join('.');
                             }
 
+                            var no_refs = pv([instance,'args','no_refs']);
+
                             var cur_val = this.get({
                                 'path': path,
                                 'instance': instance
@@ -878,13 +971,13 @@
                                     if(get_diffs == false){
                                         cur_val_parent[last_path] = value;
                                     }
-                                    else{
+                                    // else{
                                         // if(max_history == 0){
                                         //     var cur_rev_change = changes[rev.current];
                                         //     var crc_indexes = pv([cur_rev_change,'indexes']);
                                         //     var crc_child_indexes = pv([cur_rev_change,'child_indexes']);
                                         // }
-                                    }
+                                    // }
                                 }
                             }
                             if (get_diffs) {
@@ -945,7 +1038,9 @@
                                             if(max_history == 0){
                                                 if(crc_indexes){
                                                     if(t_str != 'undefined'){
-                                                        crc_indexes[loop_path] = t;
+                                                        if(no_refs !== true){
+                                                            crc_indexes[loop_path] = t;
+                                                        }
                                                     }
                                                     else {
                                                         delete crc_indexes[loop_path];
@@ -1050,7 +1145,9 @@
                                             if(max_history == 0){
                                                 if(crc_indexes){
                                                     if(t_str != 'undefined'){
-                                                        crc_indexes[loop_path] = t;
+                                                        if(no_refs !== true){
+                                                            crc_indexes[loop_path] = t;
+                                                        }
                                                     }
                                                     else {
                                                         delete crc_indexes[loop_path];
@@ -1109,9 +1206,11 @@
                                 if (rev.current != '') {
                                     
                                     var prev_indexes = changes[rev.current].indexes;
-                                    for (var i_i in prev_indexes) {
-                                        if (!cur_indexes.hasOwnProperty(i_i)) {
-                                            cur_indexes[i_i] = prev_indexes[i_i];
+                                    if(no_refs !== true){
+                                        for (var i_i in prev_indexes) {
+                                            if (!cur_indexes.hasOwnProperty(i_i)) {
+                                                cur_indexes[i_i] = prev_indexes[i_i];
+                                            }
                                         }
                                     }
 
@@ -1133,7 +1232,7 @@
                                         }
                                     }
                                     // merge old refs with new refs
-                                    if(path != ''){
+                                    if(path != '' && no_refs !== true){
                                         var old_base = prev_indexes[''];
                                         var base = jk.deep_copy_same(old_base);
                                         cur_indexes[''] = base;
@@ -1155,8 +1254,29 @@
                                         }
                                     }
                                 }
+                                
                                 // save revision
-                                var rev_change;
+                                var rev_change = undefined;
+                                var rev_indexes = cur_indexes;
+                                if(no_refs === true){
+                                    if(path == ''){
+                                        rev_indexes = value;
+                                    }
+                                    else {
+                                        var cur_path_parent = paths.slice(0, -1).join('.');
+                                        var cur_val_parent = this.get({
+                                            'path': cur_path_parent,
+                                            'instance': instance
+                                        });
+                                        var is_loopable_cur_val_parent = jk.is_loopable(cur_val_parent);
+                                        if (is_loopable_cur_val_parent) {
+                                            var last_prop_path = paths.slice(-1).join('.');
+                                            cur_val_parent[last_prop_path] = value;
+                                            var prev_indexes = changes[rev.current].indexes;
+                                            rev_indexes = prev_indexes;
+                                        }
+                                    }
+                                }
                                 if(rev.max_history != 0 || rev.current == ''){
                                     var rev_guid = jk.huid();
                                     var cur_branches = {};
@@ -1173,16 +1293,16 @@
 
                                     var rev_change = {
                                         'diffs': cur_changes_indexes,
-                                        'indexes': cur_indexes,
+                                        'indexes': rev_indexes,
                                         'branches': cur_branches,
                                         'date': new Date().getTime()
-                                    };                 
+                                    };
                                     changes[rev_guid] = rev_change;
                                     rev.current = rev_guid;
                                 }
                                 else if(rev.max_history == 0){
                                     rev_change = changes[rev.current];
-                                    rev_change['indexes'] = cur_indexes;
+                                    rev_change['indexes'] = rev_indexes;
                                 }
                                 
 

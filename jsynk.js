@@ -546,6 +546,10 @@
                                 has_prop = true;
                                 paths = paths.slice(0, i).concat(splits).concat(paths.slice(i+1));
                             }
+                            else {
+                                cur_val = undefined;
+                                has_prop = false;
+                            }
                         }
                         else {
                             cur_val = undefined;

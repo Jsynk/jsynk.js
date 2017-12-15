@@ -114,9 +114,10 @@
                     var valid = valid_count != 0 && error_count == 0;
                     var ret_val = null;
                     if(options.info){
-                        ret_val = { 
-                            vals: vals, 
-                            valid_count: valid_count, error_count, 
+                        ret_val = {
+                            vals: vals,
+                            valid_count: valid_count,
+                            error_count: error_count,
                             error_info: error_info 
                         };
                     }

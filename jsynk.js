@@ -1,6 +1,6 @@
 /* jsynk.js | License: MIT | Author: Jorge Andrés Guerra Guerra | jsynkk@gmail.com | jsynk.com */
 ;;;"Use strict";
-(function(root, factory) {  
+(function(root, factory) {
     if (typeof exports === 'object' && exports !== null) {
         module.exports = factory();
     } else if (typeof define === 'function' && define.amd) {
@@ -19,7 +19,7 @@
         };
 
         var req_ani_frame, can_ani_frame;
-        (function() {          
+        (function() {
             if(env['browser']){
                 req_ani_frame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame;
                 can_ani_frame = window.cancelAnimationFrame || window.webkitCancelAnimationFrame || window.mozCancelAnimationFrame;
@@ -52,14 +52,16 @@
             env : env,
 
             get: (function() {
-                function get(ref, type, options) {
+                function get(ref, path, options) {
                     var s = jk.get.prototype;
+                    var options = options || {};
                     var ret_val = undefined;
+                    var type = options.get || options.g || '';
                     if(jk.typeof(s.types[type]) == 'function'){
-                        ret_val == s.types[type](ref, type, options);
+                        ret_val == s.types[type](ref, path, options);
                     }
                     else {
-                        ret_val = jk.pathval(ref, type);
+                        ret_val = jk.pathval(ref, path, options);
                     }
                     return ret_val;
                 }
@@ -72,6 +74,10 @@
                 function is(ref, type, options) {
                     var s = jk.is.prototype;
                     var valid = false;
+                    if(jk.typeof(type) == 'object'){
+                        options = type;
+                        type = type.is || type.i;
+                    }
                     if(jk.typeof(s.types[type]) == 'function'){
                         valid == s.types[type](ref, type, options);
                     }
@@ -95,7 +101,7 @@
                     var error_info = {};
                     for(var p_i in props){
                         var p = props[p_i];
-                        var val = vals[p_i] = jk.get(ref, p_i);
+                        var val = vals[p_i] = jk.get(ref, p_i, p);
                         var is_valid = jk.is(val, p);
                         if(is_valid){
                             valid_count++;
@@ -276,7 +282,7 @@
                             var stack = new Error().stack;
                             var stack_urls = stack.match(/http?[^)]+/g);
                             if(stack_urls != null && stack_urls.length != 0){
-                                var base_url = location.protocol + '//' + location.host + location.port + '/';
+                                var base_url = location.protocol + '//' + location.host + '/';
                                 var last_full_url = stack_urls[stack_urls.length-1].replace(/:\d+:\d+$/, '');
                                 var last_url = last_full_url.slice(base_url.length).replace(/\?.*$/,'');
                                 path = last_url;
@@ -512,9 +518,9 @@
             },
 
             pathval: function pathval(a0, a1) {
-                var options_type = jk.typeof(a1);                
+                var options_type = jk.typeof(a1);
                 var options = options_type == 'object' ? options : {};
-                var paths = a0;                
+                var paths = a0;
                 var paths_type = jk.typeof(a0);
                 var ret_val;
                 if (paths_type == 'object' && options_type == 'string') {
@@ -535,14 +541,14 @@
                     for (var i = start_val; i < paths.length; i++) {
                         var li = paths[i];
                         if (cur_val != null && (cur_val.hasOwnProperty(li) || (cur_val.__proto__ && cur_val.__proto__.hasOwnProperty(li)))) {
-                            parent = cur_val;                            
+                            parent = cur_val;
                             cur_val = cur_val[li];
                             has_prop = true;
                         }
                         else if(cur_val != null && typeof(li) == 'string' && li.indexOf('.') != -1){
                             var splits = li.split('.');
                             if (cur_val != null && (cur_val.hasOwnProperty(splits[0]) || (cur_val.__proto__ && cur_val.__proto__.hasOwnProperty(splits[0])))) {
-                                parent = cur_val;                            
+                                parent = cur_val;
                                 cur_val = cur_val[splits[0]];
                                 has_prop = true;
                                 paths = paths.slice(0, i).concat(splits).concat(paths.slice(i+1));
@@ -775,6 +781,197 @@
                 }
                 return ret_val;
             },
+
+            sub: (function(){
+                function sub() {
+                    var s = this;
+                    if (jk.instance_of(s, jk.sub)){
+                        s.__jksubdata__ = {
+                            val: undefined,
+                            path_indexes: {},
+                            sub_list: [],
+                        };
+                    }
+                    else{
+                        return new jk.sub();
+                    }
+                };
+                sub.prototype = {
+                    get: function get(path) {
+                        var s = this;
+                        var sd = s.__jksubdata__;
+                        var path = path || '';
+                        return path ? jk.pathval(sd.val, path): sd.val;
+                    },
+                    set: function set(args) {
+                        var s = this;
+                        var sd = s.__jksubdata__;
+                        var args = args || {};
+                        s.update({ path: args.path || '', val: args.val || args.value, set: true });
+                    },
+                    update: function update(args) {
+                        var s = this;
+                        var sd = s.__jksubdata__;
+                        var args = jk.typeof(args) == 'object' ? args : {};
+                        var args_path = args.hasOwnProperty('path') != null ? args.path : '';
+                        var args_val = args.hasOwnProperty('val') ? args.val : sd.val;
+                        var args_set = args.hasOwnProperty('set') != null ? args.set : false;
+                        var path_indexes = sd.path_indexes;
+
+                        var diff_vals = [];
+                        if(args_set){ // set val and start diff
+                            var updated = false;
+                            if(args_path == ''){
+                                sd.val = args_val;
+                                updated = true;
+                            }
+                            else{
+                                var path_splits = args_path.split('.');
+                                var parent_path = path_splits.slice(0,-1).join('.');
+                                var parent = s.get(parent_path);
+                                var p_loopable = jk.is_loopable(parent);
+                                if(p_loopable){
+                                    var prop_path = path_splits.slice(-1).join('.');
+                                    parent[prop_path] = args_val;
+                                    updated = true;
+                                }
+                            }
+                            if(updated){
+                                diff_vals.push({
+                                    'path': args_path,
+                                    't': args_val,
+                                });
+                            }
+                        }
+                        else {
+                            diff_vals.push({
+                                'path': '',
+                                't': sd.val,
+                            });
+                        }
+
+                        //start looping recursively the new val set
+                        var diff_strs = [];
+                        for(var i = 0; i < diff_vals.length; i++){
+                            var args = diff_vals[i];
+                            var t = args.t;
+                            var path = args.path;
+                            // get prevval(from) and curval(to) and diff
+                            var f_str = '';
+                            var f_prop_val = path_indexes[path];
+                            if(f_prop_val){
+                                f_str = f_prop_val.val_str;
+                            }
+                            
+                            var t_str = jk.stringify(t, { recursive: false });
+                            var is_diffing = f_str != t_str;
+                            if(is_diffing){
+                                diff_strs.push(path);
+                            }
+                            // loop curval(to) children
+                            var prop_val = undefined;
+                            var prop_val_childs = [];
+                            var t_childs = {};
+                            var t_loopable = jk.is_loopable(t);
+                            if(t_loopable){
+                                for(var tv_i in t){
+                                    var tv = t[tv_i];
+                                    if(t !== undefined){
+                                        prop_val_childs.push(tv_i);
+                                    }
+                                    t_childs[tv_i] = true;
+                                    var child_diff_val = {
+                                        'path': path ? [path,'.',tv_i].join(''): tv_i,
+                                        't': tv,
+                                    };
+                                    diff_vals.push(child_diff_val);
+                                }
+                            }
+                            //loop prevval(from) children
+                            if(f_prop_val){
+                                var f_childs = f_prop_val.childs;
+                                for(var j = 0; j < f_childs.length; j++){
+                                    var f_child = f_childs[j];
+                                    var tf_searched = t_childs[f_child] ? true: false;
+                                    if(!tf_searched){
+                                        var child_diff_val = {
+                                            'path': path ? [path,'.',f_child].join(''): f_child,
+                                            't': undefined,
+                                        };
+                                        diff_vals.push(child_diff_val);
+                                    }
+                                }
+                            }
+                            // if curval(to) isn´t undefined index its val_str and childs
+                            if(t !== undefined){
+                                var prop_val = {
+                                    val_str: t_str,
+                                    childs: prop_val_childs,
+                                };
+                                path_indexes[path] = prop_val;
+                            }
+                            else { // else remove old curval(to) index
+                                delete path_indexes[path];
+                            }
+                        }
+                        // notify subscribers if there were diffs
+                        if(diff_strs.length != 0){
+                            var diff_indexes_str = diff_strs.join('\n');
+                            var sub_list = sd.sub_list;
+                            for(var i = 0; i < sub_list.length; i++){
+                                var sli = sub_list[i];
+                                var sli_path = sli.path;
+                                var sli_path_to = jk.typeof(sli_path);
+                                if(sli_path_to == 'string' && path_indexes.hasOwnProperty(sli_path_to)){
+                                    sli.fn.call(this, {paths:[sli_path]}, sli.fn_args);
+                                }
+                                else if(sli_path_to == 'regexp'){
+                                    var sli_once = sli.once;
+                                    var matches = diff_indexes_str.match(sli_path);
+                                    if(matches && matches.length != 0){
+                                        var once_paths = [];
+                                        for(var j = 0; j < matches.length; j++){
+                                            var m = matches[j];
+                                            var is_path_match = path_indexes.hasOwnProperty(m);
+                                            if(!sli_once && is_path_match){
+                                                sli.fn.call(this, {paths:[sli_path]}, sli.fn_args);
+                                            }
+                                            else if(sli_once && is_path_match){
+                                                once_paths.push(m);
+                                            }
+                                        }
+                                        if(sli_once && once_paths.length != 0){
+                                            sli.fn.call(this, {paths:once_paths}, sli.fn_args);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // console.log(diff_strs);
+                        // console.log('diff_len: ' + diff_strs.length);
+                    },
+                    on: function on(args) {
+                        var s = this;
+                        var sd = s.__jksubdata__;                        
+                        sd.sub_list.push(args);
+                    },
+                    off: function off(args) {
+                        var s = this;
+                        var sd = s.__jksubdata__;
+                        var sub_list = sd.sub_list;
+                        for (var i = sub_list.length - 1; i >= 0; i--) {
+                            var sub = sub_list[i];
+                            var ns = sub.namespace || sub.ns;
+                            var ns_typeof = jk.typeof(ns);
+                            if( (ns_typeof == 'string' && args == ns) || (ns_typeof == 'regexp' && args.test(ns)) ){
+                                sub.splice(i, 1);
+                            }
+                        }
+                    }
+                };
+                return sub;
+            })(),
 
             jSub: (function(){
                 function jSub(args) {
@@ -1748,7 +1945,7 @@
                             var index = remove[i];
                             queue.splice(index, 1);
                         }
-                        self.is_animating = continue_animating;            
+                        self.is_animating = continue_animating;
                         if (self.is_animating){
                             self.id = jk.raf(self.tick);
                         }
@@ -1805,7 +2002,7 @@
                 switch (true) {
                     case val_typeof == 'object':
                         jss_parts.push('{');
-                        var loop_index = 0;       
+                        var loop_index = 0;
                         if (options.recursive !== false) {
                             for (var i in val) {
                                 var v = val[i];
@@ -1831,7 +2028,7 @@
                         }
                         if (options.beautify && loop_index != 0) {
                             jss_parts.push('\n');
-                            jss_parts.push(tabs);                                    
+                            jss_parts.push(tabs);
                         }
                         jss_parts.push('}');
                         break;
@@ -1859,7 +2056,7 @@
                         }
                         if (options.beautify && loop_index != 0) {
                             jss_parts.push('\n');
-                            jss_parts.push(tabs);                                    
+                            jss_parts.push(tabs);
                         }
                         jss_parts.push(']');
                         break;
@@ -1926,7 +2123,7 @@
                         fp[plip_li_i] = plip_li;
                     }
                     constructors.push(pli);
-                }
+                }// TODO add constructer ref as __<constructer_name>__
                 for(var fli_i in f){
                     var fli = f[fli_i];
                     if(last_item.hasOwnProperty(fli_i)){
@@ -2344,7 +2541,7 @@
                 var ret_val;
                 if(head && diffs){
                     var transform = head;
-                    var i_offset = 0;                
+                    var i_offset = 0;
                     for (var i = 0; i < diffs.length; i++) {
                         var d = diffs[i];
                         if (typeof d == 'string' && !/^<|^>/.test(d.slice(0,1))){
@@ -2642,7 +2839,7 @@
                     lp.ctx = lp.canvas.getContext('2d');
                     lp.measure_text = function measure_text(text, options){
                         var options = options || {};
-                        var rules = options.rules || {};                            
+                        var rules = options.rules || {};
                         var word_type = rules.word_type || 'space_break';
                         var font = rules.font || '16px serif';
 
@@ -2688,7 +2885,7 @@
                 jSynk.prototype.fn = jSynk.prototype; 
 
                 jk.cias.prototype.__init__();
-                jk.huid.prototype.__init__();                
+                jk.huid.prototype.__init__();
                 jk.Layout.prototype.__init__();
 
                 delete jSynk.prototype.__init__;

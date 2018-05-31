@@ -153,6 +153,10 @@
                             dep_ids: {}, dep_ids_len: 0,
                         };
                         s.load_requests_len++;
+                        for(var i = 0; i < s.on_added.length; i++){
+                            var on_added = s.on_added[i];
+                            on_added(path);
+                        }
 
                         var suppliers = s.suppliers;
                         var agent = new jk.Agent({'catch_error':false});
@@ -211,16 +215,13 @@
                                 jk.register(module);
                             }
                             else if(jk.env.browser){
-                                var path = args.path;
-
-                                var load_request = s.load_requests[path];
-
+                                var load_request = s.load_requests[file_path];
                                 var script = document.createElement('script');
-                                script.setAttribute('src', path);
+                                script.setAttribute('src', file_path);
                                 script.async = true;
                                 script.onload = function() {
                                     if(load_request && load_request.loaded === false){
-                                        jk.register({path:path});
+                                        jk.register({path:file_path});
                                     }
                                 }
                                 document.querySelector('head').appendChild(script);
@@ -231,44 +232,70 @@
                     load_requests: {},
                     load_requests_len: 0,
                     load_request_args: {},
+
+                    on_added: [],
                 };
                 return load;
             })(),
             unload: (function(){
                 function unload(args) {
                     var sl = jk.load.prototype;
-                    var path = args.path;
-                    var id = args.id;
+                    var path = null;
+                    var id = null;
+                    var from_id = null;
+                    var to_ids = null;
+                    var args_typeof = jk.typeof(args);
+                    if(args_typeof == 'object'){
+                        path = args.path;
+                        id = args.id;
+                        from_id = args.from_id;
+                        to_ids = args.to_ids;
+                    }
+                    else if(args_typeof == 'string'){
+                        path = args;
+                    }
+
                     var load_request = sl.load_requests[path];
-                    load_request.dep_ids_len--;
-                    delete load_request.dep_ids[id];
-                    if(load_request.dep_ids_len == 0){
-                        if(load_request.req){
-                            load_request.req.abort();
-                        }
-                        if(load_request.val.on_unload){
-                            load_request.val.on_unload(load_request);
-                        }
-                        if(load_request.script){
-                            load_request.script.parentNode.removeChild(load_request.script);
-                        }
-                        delete sl.load_requests[path];
-                        sl.load_requests_len--;
-                    }
-                    delete sl.load_request_args[id];
+                    if(load_request){
 
-                    var from_id = args.from_id;
-                    var from_args = sl.load_request_args[from_id];
-                    if(from_args){
-                        delete from_args.to_ids[id];
-                        from_args.to_ids_len--;
+                        if(id != null){
+                            load_request.dep_ids_len--;
+                            delete load_request.dep_ids[id];
+                        }
+                        
+                        if(load_request.dep_ids_len == 0){
+                            if(load_request.req){
+                                load_request.req.abort();
+                            }
+                            if(load_request.val.on_unload){
+                                load_request.val.on_unload(load_request);
+                            }
+                            if(load_request.script){
+                                load_request.script.parentNode.removeChild(load_request.script);
+                            }
+                            delete sl.load_requests[path];
+                            sl.load_requests_len--;
+                        }
+
+                        if(id != null){
+                            delete sl.load_request_args[id];
+
+                            var from_args = sl.load_request_args[from_id];
+                            if(from_args){
+                                delete from_args.to_ids[id];
+                                from_args.to_ids_len--;
+                            }
+
+                            for(var tid_i in to_ids){
+                                var tid_args = sl.load_request_args[tid_i];
+                                jk.unload(tid_args)
+                            }
+                        }
+
+                        
                     }
 
-                    var to_ids = args.to_ids;
-                    for(var tid_i in to_ids){
-                        var tid_args = sl.load_request_args[tid_i];
-                        jk.unload(tid_args)
-                    }
+                    
                 }
                 unload.prototype = {};
                 return unload;
@@ -278,19 +305,29 @@
                     var sl = jk.load.prototype;
                     var path = args.path;
                     if(!path){
-                        if(jk.env.browser){
-                            var stack = new Error().stack;
-                            var stack_urls = stack.match(/http?[^)]+/g);
-                            if(stack_urls != null && stack_urls.length != 0){
-                                var base_url = location.protocol + '//' + location.host + '/';
-                                var last_full_url = stack_urls[stack_urls.length-1].replace(/:\d+:\d+$/, '');
-                                var last_url = last_full_url.slice(base_url.length).replace(/\?.*$/,'');
-                                path = last_url;
+                        var trace_files = jk.get_trace_files();
+                        if(trace_files != null){
+                            if(jk.env.browser){
+                                path = args.path = trace_files[0].rel_url;
+                            }
+                            else if (jk.env.nodejs){
+                                path = args.path = trace_files[0].rel_path;
                             }
                         }
                     }
 
                     var load_request = sl.load_requests[path];
+                    if(!load_request){
+                        load_request = sl.load_requests[path] = {
+                            val: null, loaded: false,
+                            dep_ids: {}, dep_ids_len: 0,
+                        }
+                        sl.load_requests_len++;
+                        for(var i = 0; i < sl.on_added.length; i++){
+                            var on_added = sl.on_added[i];
+                            on_added(path);
+                        }
+                    }
                     if(load_request && !load_request.loaded){
                         load_request.val = args;
                         load_request.loaded = true;
@@ -318,6 +355,94 @@
                 register.prototype = {};
                 return register;
             })(),
+            reg_info: function reg_info(args) {
+                var args = args || {};
+                var sl = jk.load.prototype;
+                var path = args.path;
+                if(!path){
+                    var trace_files = jk.get_trace_files();
+                    if(trace_files != null){
+                        if(jk.env.browser){
+                            path = args.path = trace_files[0].rel_url;
+                        }
+                        else if (jk.env.nodejs){
+                            path = args.path = trace_files[0].rel_path;
+                        }
+                    }
+                }
+                var load_request = sl.load_requests[path];
+
+                var ret_val = { path: args.path, load_request: load_request };
+                return ret_val;
+            },
+            get_trace_files: function get_trace_files() {
+                var ret_val = null;
+                
+                var trace_files = [];
+                if(jk.env.browser){
+                    var stack = new Error().stack;
+                    var stack_urls = stack.match(/http?[^)\s]+/g);
+                    if(stack_urls != null && stack_urls.length != 0){
+                        var base_url = location.protocol + '//' + location.host + '/';
+
+                        stack_urls.reverse();
+                        for(var i = 0; i < stack_urls.length; i++){
+                            var s_url = stack_urls[i];
+
+                            var full_url = s_url.replace(/:\d+:\d+$/, '');
+                            var origin = s_url.slice(full_url.length+1);
+
+                            var colon_splits = origin.split(':');
+                            var line_num = parseInt(colon_splits[0]||-1);
+                            var col_num = parseInt(colon_splits[1]||-1);
+
+                            var is_local = full_url.indexOf(base_url) == 0;
+                            var tf_li = { 
+                                is_local: is_local,
+                                url: full_url,
+                                line_num: line_num, col_num: col_num
+                            };
+                            if(is_local){
+                                var rel_full_url = full_url.slice(base_url.length);
+                                var rel_url = rel_full_url.replace(/\?.*$/, '');
+                                tf_li.rel_full_url = rel_full_url;
+                                tf_li.rel_url = rel_url;
+                            }
+
+                            trace_files.push(tf_li);
+                        }
+                    }
+                }
+                else if (jk.env.nodejs){
+                    var stack = new Error().stack;
+                    var stack_paths = stack.match(/at.+/gm);
+                    if(stack_paths != null && stack_paths.length != 0){
+                        for(var i = 0; i < stack_paths.length; i++){
+                            var s_path = stack_paths[i];
+                            var fn_name = s_path.replace(/^at | .*$/g, '');
+                            var file_strs = s_path.match(/[^ \(]*:\d+:\d+/g);
+                            var file_str = file_strs.slice(-1)[0];
+                            var file_path = file_str.replace(/:\d+.*$/g,'');
+                            var line_num = parseInt(file_str.replace(/^[^\d]+|:\d+$/g,''));
+                            var col_num = parseInt(file_str.replace(/^.*:\d+:/g,''));
+                            var rel_path = file_path.replace(/^.*(\\|\/)/,'');
+                            var tf_li = { 
+                                file_path: file_path,
+                                rel_path: rel_path,
+                                line_num: line_num, col_num: col_num,
+                            };
+                            if(!(trace_files.length == 0 && rel_path == 'jsynk.js')){
+                                trace_files.push(tf_li);
+                            }
+                        }
+                    }
+                }
+                if(trace_files.length != 0){
+                    ret_val = trace_files;
+                }
+
+                return ret_val;
+            },
 
 
             utf8_to_b64: function utf8_to_b64( str ) {
@@ -727,10 +852,8 @@
                 var ret_val;
                 if (args_js_type == 'object') {
                     var index = args.index;
-                    var match = args.match || /^match$/;
-
+                    var match = args.match != null ? args.match : 'match';
                     var match_js_type = jk.typeof(match);
-
                     if (match_js_type == 'regexp') {
                         ret_val = match.test(index);
                     }
@@ -806,23 +929,36 @@
                     set: function set(args) {
                         var s = this;
                         var sd = s.__jksubdata__;
-                        var args = args || {};
-                        s.update({ path: args.path || '', val: args.val || args.value, set: true });
-                    },
-                    update: function update(args) {
-                        var s = this;
-                        var sd = s.__jksubdata__;
-                        var args = jk.typeof(args) == 'object' ? args : {};
-                        var args_path = args.hasOwnProperty('path') != null ? args.path : '';
-                        var args_val = args.hasOwnProperty('val') ? args.val : sd.val;
-                        var args_set = args.hasOwnProperty('set') != null ? args.set : false;
+                        var args_path = '';
+                        var args_set = false;
+                        var args_typeof = jk.typeof(args);
+                        var args_val = sd.val;
+                        if(args_typeof == 'object'){
+                            args_path = args.hasOwnProperty('path') ? args.path : '';
+                            if(args.hasOwnProperty('val')){
+                                args_val = args.val;
+                                args_set = true;
+                            }
+                            if(args.hasOwnProperty('value')){
+                                args_val = args.value;
+                                args_set = true;
+                            }
+                        }
+                        if(args_typeof == 'string'){
+                            args_path = args;
+                            args_val = s.get(args_path);
+                            args_set = true;
+                        }
+                        var ignore = sd.ignore != null ? sd.ignore : '__ignore__';
                         var path_indexes = sd.path_indexes;
-
                         var diff_vals = [];
                         if(args_set){ // set val and start diff
                             var updated = false;
                             if(args_path == ''){
                                 sd.val = args_val;
+                                updated = true;
+                            }
+                            else if(args_typeof == 'string' && path_indexes[args_path]){
                                 updated = true;
                             }
                             else{
@@ -851,6 +987,8 @@
                         }
 
                         //start looping recursively the new val set
+                        var diff_indexes = {};
+                        var prev_indexes = {};
                         var diff_strs = [];
                         for(var i = 0; i < diff_vals.length; i++){
                             var args = diff_vals[i];
@@ -867,7 +1005,9 @@
                             var is_diffing = f_str != t_str;
                             if(is_diffing){
                                 diff_strs.push(path);
+                                diff_indexes[path] = true;
                             }
+
                             // loop curval(to) children
                             var prop_val = undefined;
                             var prop_val_childs = [];
@@ -875,16 +1015,20 @@
                             var t_loopable = jk.is_loopable(t);
                             if(t_loopable){
                                 for(var tv_i in t){
-                                    var tv = t[tv_i];
-                                    if(t !== undefined){
-                                        prop_val_childs.push(tv_i);
+                                    var t_ignore = jk.is_index_match({index:tv_i,match:ignore});
+                                    if(!t_ignore){
+                                        var tv = t[tv_i];
+                                        if(t !== undefined){
+                                            prop_val_childs.push(tv_i);
+                                        }
+                                        t_childs[tv_i] = true;
+                                        var child_diff_val = {
+                                            'path': path ? [path,'.',tv_i].join(''): tv_i,
+                                            't': tv,
+                                        };
+                                        diff_vals.push(child_diff_val);    
                                     }
-                                    t_childs[tv_i] = true;
-                                    var child_diff_val = {
-                                        'path': path ? [path,'.',tv_i].join(''): tv_i,
-                                        't': tv,
-                                    };
-                                    diff_vals.push(child_diff_val);
+                                    
                                 }
                             }
                             //loop prevval(from) children
@@ -898,6 +1042,7 @@
                                             'path': path ? [path,'.',f_child].join(''): f_child,
                                             't': undefined,
                                         };
+                                        prev_indexes[child_diff_val.path] = true;
                                         diff_vals.push(child_diff_val);
                                     }
                                 }
@@ -922,7 +1067,7 @@
                                 var sli = sub_list[i];
                                 var sli_path = sli.path;
                                 var sli_path_to = jk.typeof(sli_path);
-                                if(sli_path_to == 'string' && path_indexes.hasOwnProperty(sli_path_to)){
+                                if(sli_path_to == 'string' && diff_indexes[sli_path]){
                                     sli.fn.call(this, {paths:[sli_path]}, sli.fn_args);
                                 }
                                 else if(sli_path_to == 'regexp'){
@@ -932,11 +1077,10 @@
                                         var once_paths = [];
                                         for(var j = 0; j < matches.length; j++){
                                             var m = matches[j];
-                                            var is_path_match = path_indexes.hasOwnProperty(m);
-                                            if(!sli_once && is_path_match){
-                                                sli.fn.call(this, {paths:[sli_path]}, sli.fn_args);
+                                            if(!sli_once && diff_indexes[m]){
+                                                sli.fn.call(this, {paths:[m]}, sli.fn_args);
                                             }
-                                            else if(sli_once && is_path_match){
+                                            else if(sli_once && diff_indexes[m]){
                                                 once_paths.push(m);
                                             }
                                         }
@@ -947,25 +1091,27 @@
                                 }
                             }
                         }
-                        
-                        // console.log(diff_strs);
-                        // console.log('diff_len: ' + diff_strs.length);
                     },
                     on: function on(args) {
                         var s = this;
-                        var sd = s.__jksubdata__;                        
-                        sd.sub_list.push(args);
+                        var sd = s.__jksubdata__;
+                        if(args)
+                            sd.sub_list.push(args);
                     },
                     off: function off(args) {
                         var s = this;
                         var sd = s.__jksubdata__;
+                        if(args == null){
+                            sd.sub_list = [];
+                            return;
+                        }
                         var sub_list = sd.sub_list;
                         for (var i = sub_list.length - 1; i >= 0; i--) {
                             var sub = sub_list[i];
-                            var ns = sub.namespace || sub.ns;
+                            var ns = sub.namespace != null ? sub.namespace : sub.ns;
                             var ns_typeof = jk.typeof(ns);
                             if( (ns_typeof == 'string' && args == ns) || (ns_typeof == 'regexp' && args.test(ns)) ){
-                                sub.splice(i, 1);
+                                sub_list.splice(i, 1);
                             }
                         }
                     }
@@ -1764,6 +1910,7 @@
                             'current': -1,
                             'last_mission_time': 0,
                             'options': options,
+                            'is_running': false,
                         };
                     }
                     else {
@@ -1775,11 +1922,14 @@
                         'catch_error': true,
                         'capture_performance': true,
                     },
+                    is_running: function is_running() {
+                        return this._instance.is_running;
+                    },
                     get_option: function get_option(prop){
                         return jk.get_option([this._instance.options,this.default_options], prop);
                     },
                     add_mission: function add_mission(args){
-                        var mission;
+                        var mission = undefined;
                         var args_js_type = jk.typeof(args);
                         if (args_js_type == 'function') {
                             mission = {'fn':args};
@@ -1787,8 +1937,27 @@
                         else if (args_js_type == 'object' && typeof args.fn == 'function') {
                             mission = args;
                         }
+                        else if (args_js_type == 'array') {
+                            for(var i = 0; i < args.length; i++){
+                                var m = args[i];
+                                var m_js_type = jk.typeof(m);
+                                if (m_js_type == 'function') {
+                                    this._instance.missions.push({'fn':m});
+                                }
+                                else if (m_js_type == 'object' && typeof m.fn == 'function') {
+                                    this._instance.missions.push(m);
+                                }
+                            }
+                        }
                         if (mission != undefined) {
                             this._instance.missions.push(mission);
+                        }
+                    },
+                    abort_missions: function abort_missions() {
+                        this._instance.current = -1;
+                        var on_abort = this.get_option('on_abort');
+                        if (typeof on_abort == 'function') {
+                            on_abort.call(this);
                         }
                     },
                     clear_missions: function clear_missions(){
@@ -1800,7 +1969,14 @@
                         if (typeof on_start == 'function') {
                             on_start.call(this);
                         }
+                        this._instance.is_running = true;
                         this.next();
+                    },
+                    add_instant_missions: function add_instant_missions(missions, index) {
+                        var instance = this._instance;
+                        var index = index != null ? index : instance.current + 1;
+                        var cur_missions = instance.missions;
+                        instance.missions = cur_missions.slice(0, index).concat(missions).concat(cur_missions.slice(index));
                     },
                     next: function next(){
                         var instance = this._instance;
@@ -1858,6 +2034,7 @@
                             }
                         }
                         else {
+                            this._instance.is_running = false;
                             var on_complete = this.get_option('on_complete');
                             if (typeof on_complete == 'function') {
                                 on_complete.call(this);
@@ -2185,190 +2362,145 @@
                 return merge;
             },
 
-            jMarkup: (function(){
-                function jMarkup(args) {}
-
-                jMarkup.prototype = {
-                    parse: function parse(args){
-                        var markups = [];
-                        var cur_val = args.cur_val;
-                        var ms = [];
-                        var mstrs = [];
-                        this.parse_recursive({'markups': ms, 'mstrs': mstrs, 'cur_val': cur_val, 'fn': args.fn }); 
-                        var markup = mstrs.join('');
-                        return markup;
-                    },
-                    parse_recursive: function parse_recursive(args){
-                        var markups = args.markups;
-                        var mstrs = args.mstrs;
-                        var parent = args.parent;
-                        var fn = args.fn;
-                        var cur_val = args.cur_val;
-                        var typeof_cur_val = jk.typeof(cur_val);
-                        if (/array/.test(typeof_cur_val)) {
-                            for (var i = 0; i < cur_val.length; i++) {
-                                var v = cur_val[i];
-                                this.parse_recursive({
-                                    'markups': markups, 'mstrs': mstrs, 'cur_val': v, 'parent': parent, 'fn': fn
-                                });
-                            }
+            merge_to: function merge_to(from, to, options) {
+                var searched = {};
+                var props = [{
+                    f: from,
+                    t: to,
+                }];
+                for(var i = 0; i < props.length; i++){
+                    var p = props[i];
+                    var f = p.f;
+                    var t = p.t;
+                    var f_loopable = jk.is_loopable(f);
+                    if(f_loopable){
+                        for(var fli_i in f){
+                            var fli = f[fli_i];
+                            t[fli_i] = fli;
                         }
-                        else if (/object/.test(typeof_cur_val)) {
-                            var markup;
-                            var lt_val = cur_val['<'];
-                            var lt_typeof = jk.typeof(lt_val);
-                            if (lt_typeof == 'string') {
-                                var markup = {'tag':lt_val,'attrs':{},'inner':[],'options':{},'children':[]};
-                                markups.push(markup);
-                                mstrs.push('<'+lt_val);
+                    }
+                }
+                return to;
+            },
+
+            js_to_html: (function() {
+                function js_to_html(vals, options) {
+                    if(jk.typeof(vals) != 'array'){ return ''; }
+                    var s = jk.js_to_html.prototype;
+                    var strs = [];
+                    s.traverse(vals, options, strs);
+                    return strs.join('');
+                }
+                js_to_html.prototype = {
+                    keywords: { t:1, tso: 1, tsc: 1, c: 1 },
+                    traverse: function traverse(vals, options, strs, level) {
+                        if(jk.typeof(vals) != 'array'){ return ''; }
+                        var options = options || {};
+                        var level = /number/.test(jk.typeof(level)) ? level : 0;
+                        var tabs = '';
+                        var tab = options.tab || '\t';
+                        var newline = options.newline || '\n';
+                        var start_break = '';
+                        var end_break = '';
+                        if (options.beautify) {
+                            for(var i = 0; i < level; i++){
+                                tabs += tab;
                             }
-                            if (markup) {
-                                var attrs_val = cur_val['a'];
-                                var attrs_typeof = jk.typeof(attrs_val);
-                                if (attrs_typeof == 'array') {
-                                    for (var i = 0; i+1 < attrs_val.length; i+=2) {
-                                        var attr1 = attrs_val[i];
-                                        var attr2 = attrs_val[i+1];
-                                        var attr1_typeof = jk.typeof(attr1);
-                                        var attr2_typeof = jk.typeof(attr2);
-                                        if (attr1_typeof == 'string' && attr2_typeof == 'string') {
-                                            markup.attrs[attr1] = attr2;
-                                        }
-                                    }
-                                }
-                                var attr_strs = []; // tag attrs
-                                for (var attr_i in markup.attrs) {
-                                    var attr_val = {'type':'attr', 'attr':attr_i, 'val':markup.attrs[attr_i]}
-                                    if (fn) {
-                                        fn(attr_val);
-                                    }
-                                    if (attr_val.val) {
-                                        attr_strs.push(attr_val.attr+'="'+attr_val.val+'"');
-                                    }
-                                    else {
-                                        attr_strs.push(attr_val.attr);
-                                    }
-                                }
-                                if (attr_strs.length) { mstrs.push(' '); mstrs.push(attr_strs.join(' ')); }
-                                mstrs.push('>');// start tag end
+                            end_break = [newline,tabs].join('');
+                        }
+                        var s = jk.js_to_html.prototype;
+                        var keywords = s.keywords;
+                        for(var i = 0; i < vals.length; i++){
+                            var val = vals[i];
+                            if(options.traverse) options.traverse(val, options);
+                            start_break = strs.length == 0 ? '' : end_break;
+                            var attrs = [];
+                            for(var vli_i in val){
+                                if(keywords[vli_i]) continue;
+                                var vli = val[vli_i];
+                                // TODO @prop_keyword = prop_keyword support and @@keyword = @keyword
+                                var prop_str = vli_i;
+                                var vli_to = jk.typeof(vli);                                
+                                if(jk.typeof(vli) == 'string') attrs.push([prop_str,'="',vli,'"'].join(''));
+                                else if(jk.typeof(vli) == 'object') attrs.push([prop_str,"='",jk.stringify(vli),"'"].join(''));
+                                else attrs.push(prop_str);
+                            }
+                            var attrs_str = attrs.length == 0 ? '': ' ' + attrs.join(' ');
+                            if(val.t) strs.push([start_break,'<',val.t,attrs_str,'>'].join(''));
+                            if(val.tso) strs.push([start_break,'<',val.tso,attrs_str,'>'].join(''));
+                            if(val.tsc) strs.push([start_break,'</',val.tso,attrs_str,'>'].join(''));
 
-                                var gt_val = cur_val['>'];
-                                var gt_typeof = jk.typeof(gt_val);
+                            if(val.c) {
+                                s.traverse(val.c, options, strs, level+1);
+                                if(val.t) strs.push([end_break,'</',val.t,'>'].join(''));
+                            }
+                            else if(val.t) strs.push(['</',val.t,'>'].join(''));
+                        }
+                    }
+                };
+                return js_to_html;
+            })(),
 
-                                if (gt_typeof == 'string') {
-                                    markup.inner.push(gt_val);
+            js_to_css: (function() {
+                function js_to_css(vals, options) {
+                    if(jk.typeof(vals) != 'array'){ return ''; }
+                    var s = jk.js_to_css.prototype;
+                    var strs = [];
+                    s.traverse(vals, options, strs);
+                    return strs.join('');
+                }
+                js_to_css.prototype = {
+                    keywords: { s:1, c:1 },
+                    traverse: function traverse(vals, options, strs, level, par_path) {
+                        if(jk.typeof(vals) != 'array'){ return ''; }
+                        var options = options || {};
+                        var par_path = par_path || '';
+                        var level = /number/.test(jk.typeof(level)) ? level : 0;
+                        var tabs = '';
+                        var tab = options.tab || '\t';
+                        var newline = options.newline || '\n';
+                        var start_break = '';
+                        var prop_break = '';
+                        var end_break = '';
+                        if (options.beautify) {
+                            // for(var i = 0; i < level; i++){
+                            //     tabs += tab;
+                            // }
+                            prop_break = [newline,tabs,tab].join('');
+                            end_break = [newline,tabs].join('');
+                        }
+                        var s = jk.js_to_css.prototype;
+                        var keywords = s.keywords;
+                        for(var i = 0; i < vals.length; i++){
+                            var val = vals[i];
+                            if(options.traverse) options.traverse(val, options);
+                            start_break = strs.length == 0 ? '' : end_break;
+
+                            var val_to = jk.typeof(val);
+                            if(val_to == 'object'){
+                                if(val.s) strs.push([start_break,par_path,val.s,'{'].join(''));
+
+                                for(var vli_i in val){
+                                    if(keywords[vli_i]) continue;
+                                    var vli = val[vli_i];
+                                    // TODO @prop_keyword = prop_keyword support and @@keyword = @keyword
+                                    var prop_str = vli_i;
+                                    var vli_to = jk.typeof(vli);
+                                    if(jk.typeof(vli) == 'string') strs.push([prop_break,prop_str,':',vli,';'].join(''));
                                 }
 
-                                if (markup.inner.length) { mstrs.push(markup.inner.join(' ')); } // innerhtml
-                                
-                                if (gt_typeof == 'array') {
-                                    for (var i = 0; i < gt_val.length; i++) {
-                                        var v = gt_val[i];
-                                        this.parse_recursive({
-                                            'markups': markup.children, 'mstrs': mstrs, 'cur_val': v, 'parent': markups, 'fn': fn
-                                        });
-                                    }
-                                }
-                                else if (gt_val === '') { markup.options['closed'] = 1; }
-                                if (markup.options.closed !== 1) {
-                                    mstrs.push('</'+markup.tag+'>');
-                                }
+                                if(val.s) strs.push([end_break,'}'].join(''));
+
+                                if(val.c) s.traverse(val.c, options, strs, level+1, val.s);
+                            }
+                            else if(val_to == 'string'){
+                                strs.push([start_break,val].join(''));
                             }
                         }
                     }
                 };
-
-                return jMarkup;
+                return js_to_css;
             })(),
-            js_to_html: function js_to_html(args) {
-                return jk.jMarkup.prototype.parse(args);
-            },
-
-            jStylist: (function(){
-                // Add , splitter + nesting?
-                function jStylist(args) {}
-                
-                jStylist.prototype = {
-                    parse: function parse(args){
-                        var selectors = [];
-                        var cur_val = args.cur_val || args.val;
-                        var options = args.options;
-                        this.parse_recursive({'selectors': selectors, 'cur_val': cur_val});
-                        var css_strings = [];
-                        for (var i = 0; i < selectors.length; i++) {
-                            var s = selectors[i];
-                            css_strings.push(s.selector+'{');
-                            for (var attr_i in s.attrs) {
-                                var attr = s.attrs[attr_i];
-                                css_strings.push(attr_i+':'+attr+';');
-                            }
-                            css_strings.push('}');
-                        }
-                        var css = css_strings.join('');
-                        return css;
-                    },
-                    parse_recursive: function parse_recursive(args){
-                        var selectors = args.selectors;
-                        var cur_val = args.cur_val;
-                        var typeof_cur_val = jk.typeof(cur_val);
-                        var parent_path = args.parent_path || '';
-                        if (/array/.test(typeof_cur_val)) {
-                            for (var i = 0; i < cur_val.length; i++) {
-                                var v = cur_val[i];
-                                this.parse_recursive({
-                                    'selectors': selectors, 'cur_val': v, 'parent_path': parent_path
-                                });
-                            }
-                        }
-                        else if (/object/.test(typeof_cur_val)) {
-
-                            var selector;
-
-                            var cur_path;
-                            var s_val = cur_val['s'];
-                            var s_typeof = jk.typeof(s_val);
-                            if (s_typeof == 'string') {
-                                cur_path = [parent_path, s_val].join('');
-                                selector = {'selector':cur_path,'attrs':{}};
-                                selectors.push(selector);
-                            }
-
-                            if (selector) {
-
-                                var attrs_val = cur_val['a'];
-                                var attrs_typeof = jk.typeof(attrs_val);
-                                if (attrs_typeof == 'array') {
-                                    for (var i = 0; i+1 < attrs_val.length; i+=2) {
-                                        var attr1 = attrs_val[i];
-                                        var attr2 = attrs_val[i+1];
-                                        var attr1_typeof = jk.typeof(attr1);
-                                        var attr2_typeof = jk.typeof(attr2);
-                                        if (attr1_typeof == 'string' && attr2_typeof == 'string') {
-                                            selector.attrs[attr1] = attr2;
-                                        }
-                                    }
-                                }
-
-                                var nesting_val = cur_val['n'];
-                                var nesting_typeof = jk.typeof(nesting_val);
-                                if (nesting_typeof == 'array') {
-                                    for (var i = 0; i < nesting_val.length; i++) {
-                                        var v = nesting_val[i];
-                                        this.parse_recursive({
-                                            'selectors': selectors, 'cur_val': v, 'parent_path': cur_path
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                };
-
-                return jStylist;
-            })(),
-            js_to_css: function js_to_css(args) {
-                return jk.jStylist.prototype.parse(args);
-            },
 
             diff: function diff( old_str, new_str, options) {
                 var options = jk.typeof(options) == 'object' ? options : {};

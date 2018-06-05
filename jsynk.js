@@ -140,10 +140,8 @@
             load: (function(){
                 function load(args, from){
                     var s = jk.load.prototype;
+                    s.options_handler(args);
                     var id = args.id;
-                    if(!id){
-                        id = args.id = jk.huid();
-                    }
                     var path = args.path;
 
                     var load_request = s.load_requests[path];
@@ -201,13 +199,26 @@
                     return args;
                 }
                 load.prototype = {
+                    options_handler: function options_handler(args) {
+                        var id = args.id;
+                        if(!id){
+                            id = args.id = jk.huid();
+                        }
+                        if(jk.env.browser){
+                            var full_path = args.path;
+                            var path = full_path.replace(/\?.*/, '');
+                            if(path != full_path){
+                                args.full_path = full_path;
+                                args.path = path;
+                            }
+                        }
+                    },
                     suppliers: [
                         function file_loader(args) {
                             var agent = this;
-                            var file_path = args.path;
-                            var id = args.id;
                             var s = jk.load.prototype;
                             if(jk.env.nodejs){
+                                var file_path = args.path;                                
                                 var module = args.require ? args.require(file_path): s.require(file_path);
                                 if(!module.path){
                                     module.path = file_path;
@@ -215,6 +226,7 @@
                                 jk.register(module);
                             }
                             else if(jk.env.browser){
+                                var file_path = args.full_path || args.path;                                
                                 var load_request = s.load_requests[file_path];
                                 var script = document.createElement('script');
                                 script.setAttribute('src', file_path);

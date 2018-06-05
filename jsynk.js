@@ -226,10 +226,11 @@
                                 jk.register(module);
                             }
                             else if(jk.env.browser){
-                                var file_path = args.full_path || args.path;                                
+                                var full_file_path = args.full_path || args.path;
+                                var file_path = args.path;
                                 var load_request = s.load_requests[file_path];
                                 var script = document.createElement('script');
-                                script.setAttribute('src', file_path);
+                                script.setAttribute('src', full_file_path);
                                 script.async = true;
                                 script.onload = function() {
                                     if(load_request && load_request.loaded === false){

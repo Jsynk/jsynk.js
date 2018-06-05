@@ -144,7 +144,7 @@
                     var id = args.id;
                     var path = args.path;
 
-                    var load_file = args.load_file || false;
+                    var load_file = args.force_load || false;
                     var load_request = s.load_requests[path];
                     if (!load_request) {
                         load_request = s.load_requests[path] = {
@@ -170,7 +170,7 @@
                         }
                         agent.run_missions();
                     }
-                    if(args.load_file){
+                    if(args.force_load){
                         return args;
                     }
 

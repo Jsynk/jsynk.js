@@ -302,19 +302,10 @@
             })(),
             register: (function(){
                 function register(args){
+                    var sr = jk.register.prototype;
                     var sl = jk.load.prototype;
+                    sr.options_handler(args);
                     var path = args.path;
-                    if(!path){
-                        var trace_files = jk.get_trace_files();
-                        if(trace_files != null){
-                            if(jk.env.browser){
-                                path = args.path = trace_files[0].rel_url;
-                            }
-                            else if (jk.env.nodejs){
-                                path = args.path = trace_files[0].rel_path;
-                            }
-                        }
-                    }
 
                     var load_request = sl.load_requests[path];
                     if(!load_request){
@@ -352,7 +343,22 @@
 
                     return args;
                 }
-                register.prototype = {};
+                register.prototype = {
+                    options_handler: function options_handler(args) {
+                        var path = args.path;
+                        if(!path){
+                            var trace_files = jk.get_trace_files();
+                            if(trace_files != null){
+                                if(jk.env.browser){
+                                    path = args.path = trace_files[0].rel_url;
+                                }
+                                else if (jk.env.nodejs){
+                                    path = args.path = trace_files[0].rel_path;
+                                }
+                            }
+                        }
+                    }
+                };
                 return register;
             })(),
             reg_info: function reg_info(args) {

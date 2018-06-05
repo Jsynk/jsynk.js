@@ -144,6 +144,7 @@
                     var id = args.id;
                     var path = args.path;
 
+                    var load_file = args.load_file || false;
                     var load_request = s.load_requests[path];
                     if (!load_request) {
                         load_request = s.load_requests[path] = {
@@ -155,7 +156,9 @@
                             var on_added = s.on_added[i];
                             on_added(path);
                         }
-
+                        load_file = true;
+                    }
+                    if(load_file){
                         var suppliers = s.suppliers;
                         var agent = new jk.Agent({'catch_error':false});
                         for (var i = 0; i < suppliers.length; i++) {
@@ -166,6 +169,9 @@
                             });
                         }
                         agent.run_missions();
+                    }
+                    if(args.load_file){
+                        return args;
                     }
 
                     load_request.dep_ids[id] = true;
@@ -193,7 +199,9 @@
 
                     if(load_request.loaded){
                         var fn = args.fn;
-                        fn(load_request.val);
+                        if(fn){
+                            fn(load_request.val);
+                        }
                     }
 
                     return args;

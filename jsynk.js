@@ -52,16 +52,14 @@
             env : env,
 
             get: (function() {
-                function get(ref, path, options) {
+                function get(args) {
                     var s = jk.get.prototype;
-                    var options = options || {};
+                    var args = args || {};
                     var ret_val = undefined;
-                    var type = options.get || options.g || '';
-                    if(jk.typeof(s.types[type]) == 'function'){
-                        ret_val == s.types[type](ref, path, options);
-                    }
-                    else {
-                        ret_val = jk.pathval(ref, path, options);
+                    var type = args.t || args.type;
+                    var s_type_fn = s.types[type];
+                    if(jk.typeof(s_type_fn) == 'function'){
+                        ret_val = s_type_fn(args);
                     }
                     return ret_val;
                 }
@@ -69,72 +67,6 @@
                     types:{},
                 };
                 return get;
-            })(),
-            is: (function() {
-                function is(ref, type, options) {
-                    var s = jk.is.prototype;
-                    var valid = false;
-                    if(jk.typeof(type) == 'object'){
-                        options = type;
-                        type = type.is || type.i;
-                    }
-                    if(jk.typeof(s.types[type]) == 'function'){
-                        valid == s.types[type](ref, type, options);
-                    }
-                    else {
-                        valid = jk.typeof(ref) == type;
-                    }
-                    return valid;
-                }
-                is.prototype = {
-                    types: {},
-                };
-                return is;
-            })(),
-            validate: (function() {
-                function validate(ref, props, options) {
-                    var options = options || {};
-                    var s = jk.validate.prototype;
-                    var valid_count = 0;
-                    var error_count = 0;
-                    var vals = {};
-                    var error_info = {};
-                    for(var p_i in props){
-                        var p = props[p_i];
-                        var val = vals[p_i] = jk.get(ref, p_i, p);
-                        var is_valid = jk.is(val, p);
-                        if(is_valid){
-                            valid_count++;
-                        }
-                        else {
-                            error_count++;
-                            if(options.info){
-                                error_info[p_i] = p;
-                            }
-                            else {
-                                break;
-                            }
-                        }
-                    }
-
-                    var valid = valid_count != 0 && error_count == 0;
-                    var ret_val = null;
-                    if(options.info){
-                        ret_val = {
-                            vals: vals,
-                            valid_count: valid_count,
-                            error_count: error_count,
-                            error_info: error_info 
-                        };
-                    }
-                    else if(valid){
-                        ret_val = vals;
-                    }
-                    return ret_val;
-                }
-                validate.prototype = {
-                };
-                return validate;
             })(),
 
             load: (function(){
@@ -226,7 +158,7 @@
                             var agent = this;
                             var s = jk.load.prototype;
                             if(jk.env.nodejs){
-                                var file_path = args.path;                                
+                                var file_path = args.path;
                                 var module = args.require ? args.require(file_path): s.require(file_path);
                                 if(!module.path){
                                     module.path = file_path;
@@ -374,7 +306,7 @@
                                     path = args.path = trace_files[0].rel_url;
                                 }
                                 else if (jk.env.nodejs){
-                                    path = args.path = trace_files[0].rel_path;
+                                    path = args.path = trace_files[0].file_path;
                                 }
                             }
                         }
@@ -398,7 +330,7 @@
                 
                 var trace_files = [];
                 if(jk.env.browser){
-                    var stack = new Error().stack;
+                    var stack = ''; try { throw new Error(); } catch (e) { stack = e && e.stack ? e.stack : ''; }
                     var stack_urls = stack.match(/http?[^)\s]+/g);
                     if(stack_urls != null && stack_urls.length != 0){
                         var base_url = location.protocol + '//' + location.host + '/';
@@ -952,12 +884,20 @@
                         var args_typeof = jk.typeof(args);
                         var args_val = sd.val;
                         if(args_typeof == 'object'){
-                            args_path = args.hasOwnProperty('path') ? args.path : '';
-                            if(args.hasOwnProperty('val')){
+                            if(args.hasOwnProperty('p'))
+                                args_path = args.p;
+                            else if(args.hasOwnProperty('path'))
+                                args_path = args.path;
+
+                            if(args.hasOwnProperty('v')){
+                                args_val = args.v;
+                                args_set = true;
+                            }
+                            else if(args.hasOwnProperty('val')){
                                 args_val = args.val;
                                 args_set = true;
                             }
-                            if(args.hasOwnProperty('value')){
+                            else if(args.hasOwnProperty('value')){
                                 args_val = args.value;
                                 args_set = true;
                             }
@@ -1009,9 +949,9 @@
                         var prev_indexes = {};
                         var diff_strs = [];
                         for(var i = 0; i < diff_vals.length; i++){
-                            var args = diff_vals[i];
-                            var t = args.t;
-                            var path = args.path;
+                            var dv = diff_vals[i];
+                            var t = dv.t;
+                            var path = dv.path;
                             // get prevval(from) and curval(to) and diff
                             var f_str = '';
                             var f_prop_val = path_indexes[path];
@@ -1081,29 +1021,36 @@
                         if(diff_strs.length != 0){
                             var diff_indexes_str = diff_strs.join('\n');
                             var sub_list = sd.sub_list;
+                            // faster, undynamic, reverse traversing, needs schedule set, uninjectiable, unshift/concat != push
+                            // var i = sub_list.length; 
+                            // while (i--) {
+                            //     var sli = sub_list[i];
+                            // }
                             for(var i = 0; i < sub_list.length; i++){
                                 var sli = sub_list[i];
-                                var sli_path = sli.path;
+                                var sli_path = sli.path || sli.p;
+                                var sli_fn = sli.fn || sli.f;
+                                var sli_fn_args = sli.fn_args || sli.fa;
                                 var sli_path_to = jk.typeof(sli_path);
                                 if(sli_path_to == 'string' && diff_indexes[sli_path]){
-                                    sli.fn.call(this, {paths:[sli_path]}, sli.fn_args);
+                                    sli_fn.call(this, {paths:[sli_path]}, sli_fn_args);
                                 }
                                 else if(sli_path_to == 'regexp'){
-                                    var sli_once = sli.once;
+                                    var sli_once = sli.once || sli.o;
                                     var matches = diff_indexes_str.match(sli_path);
                                     if(matches && matches.length != 0){
                                         var once_paths = [];
                                         for(var j = 0; j < matches.length; j++){
                                             var m = matches[j];
                                             if(!sli_once && diff_indexes[m]){
-                                                sli.fn.call(this, {paths:[m]}, sli.fn_args);
+                                                sli_fn.call(this, {paths:[m]}, sli_fn_args);
                                             }
                                             else if(sli_once && diff_indexes[m]){
                                                 once_paths.push(m);
                                             }
                                         }
                                         if(sli_once && once_paths.length != 0){
-                                            sli.fn.call(this, {paths:once_paths}, sli.fn_args);
+                                            sli_fn.call(this, {paths:once_paths}, sli_fn_args);
                                         }
                                     }
                                 }
@@ -1113,8 +1060,14 @@
                     on: function on(args) {
                         var s = this;
                         var sd = s.__jksubdata__;
-                        if(args)
+                        if(jk.typeof(args) == 'object'){
                             sd.sub_list.push(args);
+                            if(args.run || args.r){
+                                var fn = args.f || args.fn;
+                                var fn_args = args.fa || args.fn_args;
+                                fn({paths:[]},fn_args);
+                            }
+                        }
                     },
                     off: function off(args) {
                         var s = this;
@@ -1126,13 +1079,40 @@
                         var sub_list = sd.sub_list;
                         for (var i = sub_list.length - 1; i >= 0; i--) {
                             var sub = sub_list[i];
-                            var ns = sub.namespace != null ? sub.namespace : sub.ns;
+                            var ns = sub.namespace != null ? sub.namespace : sub.ns != null ? sub.ns : sub.n;
                             var ns_typeof = jk.typeof(ns);
                             if( (ns_typeof == 'string' && args == ns) || (ns_typeof == 'regexp' && args.test(ns)) ){
                                 sub_list.splice(i, 1);
                             }
                         }
-                    }
+                    },
+
+                    debug: function debug(args){
+                        var s = this;
+                        var sd = s.__jksubdata__;
+                        var ns = '__sub_debugger__';
+                        s.off(ns);
+                        var args_typeof = jk.typeof(args);
+                        if (args){
+                            s.on({p:/^.*$/gm,n:ns,f: function(e){
+                                var val = jk.stringify(s.get(e.paths[0]), {recursive:false});
+                                var log = [e.paths[0], val].join(' : ');
+                                if( (args_typeof == 'string' && args == log) || (args_typeof == 'regexp' && args.test(log)) ){
+                                    // Step through stack trace 
+                                    // to locate where this value is set
+                                    debugger;
+                                }
+                                else {
+                                    console.log(["'",log,"'"].join(''));
+                                }
+                            }});
+                            sd.sub_list.sort(function sort_ns_first(a, b){
+                                if(a.namespace == ns) return -1;
+                                else if(b.namespace == ns) return 1;
+                                return 0;
+                            });
+                        }
+                    },
                 };
                 return sub;
             })(),
@@ -1248,8 +1228,8 @@
 
                         if (a.length == 1) {
                             if (typeofs[0] == 'object') {
-                                value = a0.value;
-                                path = a0.path || '';
+                                value = a0.v || a0.value;
+                                path = a0.p || a0.path || '';
                                 paths = [''];
                                 instance = a0.instance || this._instance;
                                 ignore = a0.ignore || instance.ignore || /^p_ignore$/;
@@ -1792,12 +1772,12 @@
 
                         if (a.length == 1) {
                             if (typeofs[0] == 'object') {
-                                path = a0.path || '';
+                                path = a0.p || a0.path || '';
                                 instance = a0.instance || this._instance;
-                                namespace = a0.namespace || '';
-                                fn = a0.fn;
-                                fn_args = a0.fn_args;
-                                once = a0.once;
+                                namespace = a0.n || a0.namespace || '';
+                                fn = a0.f || a0.fn;
+                                fn_args = a.fa || a0.fn_args;
+                                once = a0.o || a0.once;
 
                                 has_val = true;
                             }
@@ -1929,6 +1909,7 @@
                             'last_mission_time': 0,
                             'options': options,
                             'is_running': false,
+                            'is_paused': false,
                         };
                     }
                     else {
@@ -1942,6 +1923,9 @@
                     },
                     is_running: function is_running() {
                         return this._instance.is_running;
+                    },
+                    is_paused: function is_paused() {
+                        return this._instance.is_paused;
                     },
                     get_option: function get_option(prop){
                         return jk.get_option([this._instance.options,this.default_options], prop);
@@ -1971,6 +1955,9 @@
                             this._instance.missions.push(mission);
                         }
                     },
+                    pause_missions: function pause_missions(){
+                        this._instance.is_paused = !this._instance.is_paused;
+                    },
                     abort_missions: function abort_missions() {
                         this._instance.current = -1;
                         var on_abort = this.get_option('on_abort');
@@ -1979,7 +1966,8 @@
                         }
                     },
                     clear_missions: function clear_missions(){
-                        this._instance.missions = [];
+                        var instance = this._instance;
+                        instance.missions = [];
                     },
                     run_missions: function run_missions(){
                         this._instance.current = -1;
@@ -1987,7 +1975,6 @@
                         if (typeof on_start == 'function') {
                             on_start.call(this);
                         }
-                        this._instance.is_running = true;
                         this.next();
                     },
                     add_instant_missions: function add_instant_missions(missions, index) {
@@ -1999,6 +1986,10 @@
                     next: function next(){
                         var instance = this._instance;
 
+                        if(instance.is_paused){
+                            return;
+                        }
+
                         if (instance.current > -1) {
                             var on_mission_finish = this.get_option('on_mission_finish');
                             if (typeof on_mission_finish == 'function') {
@@ -2007,6 +1998,7 @@
                         }
 
                         if (instance.missions.length > instance.current+1) {
+                            instance.is_running = true;
                             instance.current++;
                             var cur_mission = instance.missions[instance.current];
                             var ct_fn = cur_mission.fn;
@@ -2046,13 +2038,14 @@
                             }
                         }
                         else if (instance.missions.length == 0) {
+                            instance.is_running = false;
                             var on_missing_missions = this.get_option('on_missing_missions');
                             if (typeof on_missing_missions == 'function') {
                                 on_missing_missions.call(this);
                             }
                         }
                         else {
-                            this._instance.is_running = false;
+                            instance.is_running = false;
                             var on_complete = this.get_option('on_complete');
                             if (typeof on_complete == 'function') {
                                 on_complete.call(this);
@@ -2391,7 +2384,8 @@
                     var f = p.f;
                     var t = p.t;
                     var f_loopable = jk.is_loopable(f);
-                    if(f_loopable){
+                    var t_loopable = jk.is_loopable(t);
+                    if(f_loopable && t_loopable){
                         for(var fli_i in f){
                             var fli = f[fli_i];
                             t[fli_i] = fli;
@@ -2431,6 +2425,11 @@
                         for(var i = 0; i < vals.length; i++){
                             var val = vals[i];
                             if(options.traverse) options.traverse(val, options);
+                            var val_typeof = jk.typeof(val);
+                            if(val_typeof == 'string'){
+                                strs.push(val);
+                                continue;
+                            }
                             start_break = strs.length == 0 ? '' : end_break;
                             var attrs = [];
                             for(var vli_i in val){
@@ -2438,9 +2437,9 @@
                                 var vli = val[vli_i];
                                 // TODO @prop_keyword = prop_keyword support and @@keyword = @keyword
                                 var prop_str = vli_i;
-                                var vli_to = jk.typeof(vli);                                
-                                if(jk.typeof(vli) == 'string') attrs.push([prop_str,'="',vli,'"'].join(''));
-                                else if(jk.typeof(vli) == 'object') attrs.push([prop_str,"='",jk.stringify(vli),"'"].join(''));
+                                var vli_to = jk.typeof(vli);
+                                if(vli_to == 'string') attrs.push([prop_str,'="',vli,'"'].join(''));
+                                else if(vli_to == 'object') attrs.push([prop_str,"='",jk.stringify(vli),"'"].join(''));
                                 else attrs.push(prop_str);
                             }
                             var attrs_str = attrs.length == 0 ? '': ' ' + attrs.join(' ');

@@ -1766,7 +1766,7 @@
                     on: function on(a0, a1, a2, a3) {
                         var a = jk.get_arguments([a0, a1, a2, a3]);
                         var has_val = false;
-                        var path, instance, namespace, fn, fn_args, once;
+                        var path, instance, namespace, fn, fn_args, once, run;
 
                         var typeofs = jk.get_typeofs(a);
 
@@ -1778,6 +1778,7 @@
                                 fn = a0.f || a0.fn;
                                 fn_args = a.fa || a0.fn_args;
                                 once = a0.o || a0.once;
+                                run = a0.r || a0.run;
 
                                 has_val = true;
                             }
@@ -1813,13 +1814,17 @@
                         }
 
                         if (has_val && fn) {
-                            instance.sub.list.push({
+                            var sli = {
                                 'path': path,
                                 'fn': fn,
                                 'fn_args': fn_args,
                                 'namespace': namespace,
                                 'once': once
-                            });
+                            };
+                            instance.sub.list.push(sli);
+                            if(run){
+                                fn.call(this, {paths:[]}, fn_args);
+                            }
                         }
                     },
                     off: function off(args) {

@@ -10,7 +10,6 @@
     }
 })(this, function() {
     return (function() {
-
         var env = {
             browser: typeof window == 'object' && window !== null ? true : false,
             cordova: typeof Cordova == 'object' && Cordova !== null ? true : false,
@@ -40,20 +39,13 @@
             }
         })();
 
-        function jSynk() {};
-        jSynk.prototype = {
+        var jk = {
             this: this,
-            prev_jk_ref: this.jk,
-            noConflict: function noConflict() {
-                var cur_ref = jk;
-                jk = jk.prev_jk_ref;
-                return cur_ref;
-            },
             env : env,
 
-            get: (function() {
-                function get(args) {
-                    var s = jk.get.prototype;
+            run: (function() {
+                function run(args) {
+                    var s = jk.run.prototype;
                     var args = args || {};
                     var ret_val = undefined;
                     var type = args.t || args.type;
@@ -63,10 +55,10 @@
                     }
                     return ret_val;
                 }
-                get.prototype = {
+                run.prototype = {
                     types:{},
                 };
-                return get;
+                return run;
             })(),
 
             load: (function(){
@@ -74,7 +66,7 @@
                     var s = jk.load.prototype;
                     s.options_handler(args);
                     var id = args.id;
-                    var path = args.path;
+                    var path = args.p || args.path;
 
                     var load_file = args.force_load || false;
                     var load_request = s.load_requests[path];
@@ -92,7 +84,7 @@
                     }
                     if(load_file){
                         var suppliers = s.suppliers;
-                        var agent = new jk.Agent({'catch_error':false});
+                        var agent = new jk.agent({'catch_error':false});
                         for (var i = 0; i < suppliers.length; i++) {
                             var supplier = suppliers[i];
                             agent.add_mission({
@@ -111,7 +103,7 @@
 
                     if(from){
                         var from_id = from.id;
-                        var from_path = from.path;
+                        var from_path = from.p || from.path;
 
                         var from_args = s.load_request_args[from_id];
                         if(from_args){
@@ -130,7 +122,7 @@
                     s.load_request_args[id] = args;
 
                     if(load_request.loaded){
-                        var fn = args.fn;
+                        var fn = args.f || args.fn;
                         if(fn){
                             fn(load_request.val);
                         }
@@ -145,11 +137,11 @@
                             id = args.id = jk.huid();
                         }
                         if(jk.env.browser){
-                            var full_path = args.path;
+                            var full_path = args.p || args.path;
                             var path = full_path.replace(/\?.*/, '');
                             if(path != full_path){
                                 args.full_path = full_path;
-                                args.path = path;
+                                args.p = path;
                             }
                         }
                     },
@@ -258,7 +250,7 @@
                     var sr = jk.register.prototype;
                     var sl = jk.load.prototype;
                     sr.options_handler(args);
-                    var path = args.path;
+                    var path = args.p || args.path;
 
                     var load_request = sl.load_requests[path];
                     if(!load_request){
@@ -281,8 +273,9 @@
                         var dep_ids = load_request.dep_ids;
                         for(var did_i in dep_ids){
                             var did = load_request_args[did_i];
-                            if(did && did.fn){
-                                did.fn(load_request.val);
+                            if(did){
+                                var fn = did.f || did.fn;
+                                fn(load_request.val);
                             }
                         }
                     }
@@ -298,7 +291,7 @@
                 }
                 register.prototype = {
                     options_handler: function options_handler(args) {
-                        var path = args.path;
+                        var path = args.p || args.path;
                         if(!path){
                             var trace_files = jk.get_trace_files();
                             if(trace_files != null){
@@ -394,27 +387,6 @@
                 return ret_val;
             },
 
-
-            utf8_to_b64: function utf8_to_b64( str ) {
-                if (jk.env['browser']) {
-                    return window.btoa(unescape(encodeURIComponent( str )));
-                }
-                else if (jk.env.nodejs){
-                    return (new Buffer(str)).toString('base64');
-                }
-                return str;
-            },
-            b64_to_utf8: function b64_to_utf8( str ) {
-                if (jk.env['browser']) {
-                    return decodeURIComponent(escape(window.atob( str )));
-                }
-                else if (jk.env.nodejs){
-                    return (new Buffer(str, 'base64')).toString('utf8');
-                }
-                return str;
-            },
-
-            // compress int and string
             cias: (function(){
                 function cias(val) {
                     if (this instanceof jk.cias){
@@ -468,8 +440,6 @@
                 };
                 return cias;
             })(),
-
-            //horizonal unique id - highres-timestamp
             huid: (function(){
                 function huid(){
                     var huid = '';
@@ -554,21 +524,7 @@
 
                 return huid;
             })(),
-            guid: function guid(parts) {
-                var parts = parts || 10;
-                var ret_val = '';
-                for (var i = 0; i < parts; i++) {
-                    ret_val += Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
-                }
-                return ret_val;
-            },
-            type: function type(ref) {
-                if (ref === null){return "Null";}
-                else if (ref === undefined){return "Undefined";}
-                var funcNameRegex = /function (.{1,})\(/;
-                var results = (funcNameRegex).exec((ref).constructor.toString());
-                return (results && results.length > 1) ? results[1] : "";
-            },
+
             typeof: function get_typeof(ref) {
                 var ret_val = typeof(ref);
                 if (ret_val == 'object') {
@@ -598,7 +554,11 @@
                 var paths = a0;
                 var paths_type = jk.typeof(a0);
                 var ret_val;
-                if (paths_type == 'object' && options_type == 'string') {
+                if(paths_type == 'object' && options_type == 'undefined'){
+                    paths = [a0.paths || a0.p];
+                    options = a0;
+                }
+                else if (paths_type == 'object' && options_type == 'string') {
                     paths = [a0, a1];
                     paths_type = 'array';
                 }
@@ -613,7 +573,8 @@
                         parent = cur_val;
                     }
                     var has_prop = cur_val != null;
-                    for (var i = start_val; i < paths.length; i++) {
+                    var paths_len = paths.length;
+                    for (var i = start_val; i < paths_len; i++) {
                         var li = paths[i];
                         if (cur_val != null && (cur_val.hasOwnProperty(li) || (cur_val.__proto__ && cur_val.__proto__.hasOwnProperty(li)))) {
                             parent = cur_val;
@@ -627,6 +588,7 @@
                                 cur_val = cur_val[splits[0]];
                                 has_prop = true;
                                 paths = paths.slice(0, i).concat(splits).concat(paths.slice(i+1));
+                                paths_len = paths.length;
                             }
                             else {
                                 cur_val = undefined;
@@ -665,39 +627,10 @@
                 return ret_val;
             },
 
-            is_same: function is_same(ref1, ref2) {
-                var ret_val = false;
-                var str_opt = {recursive:false};
-                if ( jk.stringify(ref1, str_opt) == jk.stringify(ref2, str_opt) ) {
-                    ret_val = true;
-                }
-                return ret_val;
-            },
             is_loopable: function is_loopable(ref) {
                 return ref != null ? /object|function/.test(typeof(ref)) ? true : false : false;
             },
-            // mix deep copy and partial deep copy
-            deep_copy_same: function deep_copy_same(ref) { //dcs regex, date? change to ref copy?
-                var ref_js_type = jk.typeof(ref);
-                var ret_val = ref;
-                if (ref_js_type == 'object') {
-                    ret_val = {};
-                    for (var ref_i in ref) {
-                        ret_val[ref_i] = ref[ref_i];
-                    }
-                }
-                else if (ref_js_type == 'array') {
-                    ret_val = [];
-                    for (var i = 0; i < ref.length; i++) {
-                        ret_val.push(ref[i]);
-                    }
-                }
-                else if (ref_js_type == 'function') {
-                    ret_val = eval(ref.toString());
-                }
-                return ret_val;
-            },
-            // deep copy fix maximum callstack size exceeded limit
+
             deep_copy: function deep_copy(args) {
                 var args_js_type = jk.typeof(args);
                 var ret_val;
@@ -801,8 +734,8 @@
                 var args_js_type = jk.typeof(args);
                 var ret_val;
                 if (args_js_type == 'object') {
-                    var index = args.index;
-                    var match = args.match != null ? args.match : 'match';
+                    var index = args.index != null ? args.index : args.i;
+                    var match = args.match != null ? args.match : args.m;
                     var match_js_type = jk.typeof(match);
                     if (match_js_type == 'regexp') {
                         ret_val = match.test(index);
@@ -813,42 +746,13 @@
                 }
                 return ret_val;
             },
-            traverse_fun: function traverse_fun(args) {
-                var args = args || {};
-                var fn = args.fn;
-                var fn_args = args.fn_args;
-                if (typeof fn == 'function') {
-                    fn(fn_args, fn);
-                }
-            },
             
-
             get_option: function get_option(opt_list, prop){
                 var ret_val;
                 for (var i = 0; i < opt_list.length; i++) {
                     var opt_li = opt_list[i];
                     if (opt_li && opt_li.hasOwnProperty(prop)){
                         ret_val = opt_li[prop];
-                        break;
-                    }
-                }
-                return ret_val;
-            },
-            get_typeofs: function get_typeofs(args){
-                var ret_val = {};
-                for (var i in args){
-                    ret_val[i] = jk.typeof(args[i]);
-                }
-                return ret_val;
-            },
-            get_arguments: function get_arguments(args){
-                var ret_val = [];
-                for(var i in args){
-                    var a = args[i];
-                    if(a !== undefined) {
-                        ret_val.push(a);
-                    }
-                    else {
                         break;
                     }
                 }
@@ -931,24 +835,25 @@
                                 }
                             }
                             if(updated){
-                                diff_vals.push({
+                                diff_vals = [{
                                     'path': args_path,
                                     't': args_val,
-                                });
+                                }].concat(diff_vals);
                             }
                         }
                         else {
-                            diff_vals.push({
+                            diff_vals = [{
                                 'path': '',
                                 't': sd.val,
-                            });
+                            }].concat(diff_vals);
                         }
 
                         //start looping recursively the new val set
                         var diff_indexes = {};
                         var prev_indexes = {};
                         var diff_strs = [];
-                        for(var i = 0; i < diff_vals.length; i++){
+                        var i = diff_vals.length;
+                        while(i--){
                             var dv = diff_vals[i];
                             var t = dv.t;
                             var path = dv.path;
@@ -984,7 +889,7 @@
                                             'path': path ? [path,'.',tv_i].join(''): tv_i,
                                             't': tv,
                                         };
-                                        diff_vals.push(child_diff_val);    
+                                        diff_vals = [child_diff_val].concat(diff_vals); i++;
                                     }
                                     
                                 }
@@ -992,7 +897,8 @@
                             //loop prevval(from) children
                             if(f_prop_val){
                                 var f_childs = f_prop_val.childs;
-                                for(var j = 0; j < f_childs.length; j++){
+                                var f_childs_len = f_childs.length;
+                                for(var j = 0; j < f_childs_len; j++){
                                     var f_child = f_childs[j];
                                     var tf_searched = t_childs[f_child] ? true: false;
                                     if(!tf_searched){
@@ -1001,7 +907,7 @@
                                             't': undefined,
                                         };
                                         prev_indexes[child_diff_val.path] = true;
-                                        diff_vals.push(child_diff_val);
+                                        diff_vals = [child_diff_val].concat(diff_vals); i++;
                                     }
                                 }
                             }
@@ -1021,16 +927,13 @@
                         if(diff_strs.length != 0){
                             var diff_indexes_str = diff_strs.join('\n');
                             var sub_list = sd.sub_list;
-                            // faster, undynamic, reverse traversing, needs schedule set, uninjectiable, unshift/concat != push
-                            // var i = sub_list.length; 
-                            // while (i--) {
-                            //     var sli = sub_list[i];
-                            // }
-                            for(var i = 0; i < sub_list.length; i++){
+                            var i = sub_list.length; 
+                            while (i--) {
                                 var sli = sub_list[i];
+                                if(!sli){continue;}
                                 var sli_path = sli.path || sli.p;
-                                var sli_fn = sli.fn || sli.f;
-                                var sli_fn_args = sli.fn_args || sli.fa;
+                                var sli_fn = sli.f || sli.fn;
+                                var sli_fn_args = sli.fa || sli.fn_args;
                                 var sli_path_to = jk.typeof(sli_path);
                                 if(sli_path_to == 'string' && diff_indexes[sli_path]){
                                     sli_fn.call(this, {paths:[sli_path]}, sli_fn_args);
@@ -1061,8 +964,8 @@
                         var s = this;
                         var sd = s.__jksubdata__;
                         if(jk.typeof(args) == 'object'){
-                            sd.sub_list.push(args);
-                            if(args.run || args.r){
+                            sd.sub_list = [args].concat(sd.sub_list);
+                            if(args.r || args.run){
                                 var fn = args.f || args.fn;
                                 var fn_args = args.fa || args.fn_args;
                                 fn({paths:[]},fn_args);
@@ -1077,16 +980,21 @@
                             return;
                         }
                         var sub_list = sd.sub_list;
-                        for (var i = sub_list.length - 1; i >= 0; i--) {
+                        var i = sub_list.length;
+                        while (i--) {
                             var sub = sub_list[i];
-                            var ns = sub.namespace != null ? sub.namespace : sub.ns != null ? sub.ns : sub.n;
-                            var ns_typeof = jk.typeof(ns);
-                            if( (ns_typeof == 'string' && args == ns) || (ns_typeof == 'regexp' && args.test(ns)) ){
+                            var namespace = null;
+                            if (sub.hasOwnProperty('n'))
+                                namespace = sub.n;
+                            else if (sub.hasOwnProperty('namespace'))
+                                namespace = sub.namespace;
+                            var namespace_typeof = jk.typeof(namespace);
+                            if( (namespace_typeof == 'string' && args == namespace) || (namespace_typeof == 'regexp' && args.test(namespace)) ){
                                 sub_list.splice(i, 1);
                             }
                         }
                     },
-
+                    
                     debug: function debug(args){
                         var s = this;
                         var sd = s.__jksubdata__;
@@ -1094,21 +1002,35 @@
                         s.off(ns);
                         var args_typeof = jk.typeof(args);
                         if (args){
-                            s.on({p:/^.*$/gm,n:ns,f: function(e){
+                            var log = undefined;
+                            var stack = undefined;
+                            if(args_typeof == 'object'){
+                                log = args.l || args.log;
+                                stack = args.s || args.stack;
+                            }
+                            else if(args_typeof == 'string'){
+                                stack = args;
+                            }
+                            else if(args_typeof == 'regexp'){
+                                log = args;
+                            }
+                            else if(args == 1 || args == true){
+                                log = /.*/;
+                            }
+                            s.on({p:/^.*$/gm,n:ns,f:function debug(e){
                                 var val = jk.stringify(s.get(e.paths[0]), {recursive:false});
-                                var log = [e.paths[0], val].join(' : ');
-                                if( (args_typeof == 'string' && args == log) || (args_typeof == 'regexp' && args.test(log)) ){
-                                    // Step through stack trace 
-                                    // to locate where this value is set
-                                    debugger;
+                                var log_text = [e.paths[0],' : ',val].join('');
+                                if( log && jk.is_index_match({ i: log_text, m: log }) ){
+                                    console.log(["'",log_text,"'"].join(''));
                                 }
-                                else {
-                                    console.log(["'",log,"'"].join(''));
+                                if( stack && jk.is_index_match({ i: log_text, m: stack }) ){
+                                    // Step through stack trace to locate where this value is set
+                                    debugger;
                                 }
                             }});
                             sd.sub_list.sort(function sort_ns_first(a, b){
-                                if(a.namespace == ns) return -1;
-                                else if(b.namespace == ns) return 1;
+                                if( ( a.n || a.namespace ) == ns) return 1;
+                                else if( ( b.n || b.namespace ) == ns) return -1;
                                 return 0;
                             });
                         }
@@ -1116,798 +1038,11 @@
                 };
                 return sub;
             })(),
-
-            jSub: (function(){
-                function jSub(args) {
-                    var args = args || {};
-                    var s = this;
-                    if (jk.instance_of(s, jk.jSub)){
-                        s._instance = {
-                            'args': args,
-                            'rev': {
-                                'changes': {},
-                                'current': '',
-                                'max_history': 1
-                            },
-                            'sub': {
-                                'list': []
-                            },
-                            'version': '1.0.0'
-                        };
-                        if (args.max_history != undefined) {
-                            s._instance.rev.max_history = args.max_history;
-                        }
-                        if (args.value != undefined) {
-                            s.set({
-                                'value': args.value
-                            });
-                        }
-                    }
-                    else{
-                        return new jk.jSub(args);
-                    }
-                };
-                jSub.prototype = {
-                    get: function get(args) {
-                        var args_typeof = jk.typeof(args);
-                        var options;
-                        if (args_typeof == 'object') {
-                            options = args;
-                        }
-                        else if (args_typeof == 'string') {
-                            options = {'path': args};
-                        }
-                        else{
-                            options = {};
-                        }
-                        var path = options.path || '';
-                        var instance = options.instance || this._instance;
-                        var rev_id = options.rev_id || instance.rev.current;
-                        var rev_id_changes = instance.rev.changes[rev_id];
-                        var ret_val;
-                        var history = jk.typeof(options.history) == 'number' ? options.history: 0;
-                        if (history == 0) {
-                            if (rev_id_changes) {
-                                var rev_indexes = rev_id_changes.indexes;
-                                if (rev_indexes) {
-                                    if (rev_indexes.hasOwnProperty(path)) {
-                                        ret_val = rev_indexes[path];
-                                    }
-                                    else {
-                                        if(path == ''){
-                                            ret_val = rev_indexes;
-                                        }
-                                        else{
-                                            ret_val = jk.pathval(rev_indexes, path);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        else {
-                            ret_val = [];
-                            jk.traverse_fun({
-                                'fn': function(args, fn) {
-                                    args.list.push(args.self.get({'path':args.path,'rev_id':args.target_rev}));
-                                    var rev = args.self._instance.rev;
-                                    var rev_changes = rev.changes;
-                                    var cur_rev_change = rev_changes[args.target_rev];
-                                    var crbf = cur_rev_change ? cur_rev_change.branches.from : undefined;
-                                    if (args.history > args.branch_level) {
-                                        if (crbf) {
-                                            fn({
-                                                'target_rev': crbf,
-                                                'branch_level': args.branch_level + 1,
-                                                'self': args.self,
-                                                'path': args.path,
-                                                'list': args.list,
-                                                'history': args.history
-                                            }, fn);
-                                        }
-                                    }
-                                },
-                                'fn_args': {
-                                    'target_rev': rev_id,
-                                    'branch_level': 0,
-                                    'self': this,
-                                    'path': path,
-                                    'list': ret_val,
-                                    'history': history
-                                }
-                            });
-                        }
-                        
-                        return ret_val;
-                    },
-                    set: function set(a0, a1) {
-                        var a = jk.get_arguments([a0, a1]);
-                        var has_val = false;
-                        var value, path, paths, instance, ignore;
-
-                        var typeofs = jk.get_typeofs(a);
-
-                        if (a.length == 1) {
-                            if (typeofs[0] == 'object') {
-                                value = a0.v || a0.value;
-                                path = a0.p || a0.path || '';
-                                paths = [''];
-                                instance = a0.instance || this._instance;
-                                ignore = a0.ignore || instance.ignore || /^p_ignore$/;
-
-                                has_val = true;
-                            }
-                        }
-                        else if (a.length == 2) {
-                            if (typeofs[0] == 'string') {
-                                value = a[1];
-                                path = a[0] || '';
-                                paths = [''];
-                                instance = this._instance;
-                                ignore = instance.ignore || /^p_ignore$/;
-
-                                has_val = true;
-                            }
-                        }
-
-                        if (has_val) {
-
-                            var pv = jk.pathval;
-
-                            var rev = instance.rev;
-                            var changes = rev.changes;
-
-                            var max_history = rev.max_history;
-
-                            var path_type = jk.type(path);
-                            if (path_type == 'String') {
-                                paths = path.split('.');
-                            }
-                            else if (path_type == 'Array') {
-                                paths = path;
-                                path = paths.join('.');
-                            }
-
-                            var no_refs = pv([instance,'args','no_refs']);
-
-                            var cur_val = this.get({
-                                'path': path,
-                                'instance': instance
-                            });
-
-                            var cur_indexes = {};
-                            var cur_str_indexes;
-                            var cur_child_indexes;
-                            var cur_changes_indexes = {
-                                'text_indexes': '',
-                                'path_indexes': {},
-                                'paths': [],
-                            };
-
-                            if(max_history == 0){
-                                cur_str_indexes = {};
-                                cur_child_indexes = {};
-                            }
-
-                            var min_diffs = pv([instance,'args','min_diffs']);
-                            if (min_diffs) {
-                                cur_changes_indexes['path_str_indexes'] = {};
-                            }
-
-                            var get_diffs = path == '' ? true : cur_val != undefined ? true : false;
-                            if (!get_diffs && path) { // handle setting new prop to object if muteable
-                                var cur_path_parent = paths.slice(0, -1).join('.');
-                                var cur_val_parent = this.get({
-                                    'path': cur_path_parent,
-                                    'instance': instance
-                                });
-                                var is_loopable_cur_val_parent = jk.is_loopable(cur_val_parent);
-                                if (is_loopable_cur_val_parent) {
-                                    get_diffs = true;
-
-                                    var last_path = paths.slice(-1); // handle setting ignored prop to prev rev
-                                    var ignore_js_type = jk.typeof(ignore);
-                                    if (ignore_js_type == 'regexp') {
-                                        if (ignore.test(last_path)) {
-                                            get_diffs = false;
-                                        }
-                                    }
-                                    else if (ignore === last_path) {
-                                        get_diffs = false;
-                                    }
-                                    if(get_diffs == false){
-                                        cur_val_parent[last_path] = value;
-                                    }
-                                    // else{
-                                        // if(max_history == 0){
-                                        //     var cur_rev_change = changes[rev.current];
-                                        //     var crc_indexes = pv([cur_rev_change,'indexes']);
-                                        //     var crc_child_indexes = pv([cur_rev_change,'child_indexes']);
-                                        // }
-                                    // }
-                                }
-                            }
-                            if (get_diffs) {
-
-                                var indexes = cur_indexes;
-                                var child_indexes = cur_child_indexes;
-                                var str_indexes = cur_str_indexes;
-                                var change_indexes = cur_changes_indexes;
-                                var ignore_js_type = jk.typeof(ignore);
-
-                                var cur_rev_change = rev.changes[rev.current];
-                                var crc_indexes = pv([cur_rev_change,'indexes']);
-                                var crc_child_indexes = pv([cur_rev_change,'child_indexes']);
-                                var crc_str_indexes = pv([cur_rev_change,'str_indexes']);
-
-                                // get from diffs
-                                var from_diffs = [{
-                                    'path': path,
-                                    'f': cur_val,
-                                    't': value,
-                                }];
-                                for (var i = 0; i < from_diffs.length; i++) {
-                                    var args = from_diffs[i];
-
-                                    var loop_path = args.path;
-                                    var path_index = args.path_index || '';
-                                    var parent_path = args.parent_path || '';
-                                    var f = args.f;
-                                    var t = args.t;
-
-                                    if (indexes && !indexes.hasOwnProperty(loop_path)) {
-                                        indexes[loop_path] = t;
-                                        var f_str = undefined;
-                                        if(crc_str_indexes){
-                                            f_str = crc_str_indexes[loop_path] || jk.stringify();
-                                        }
-                                        if(!f_str){
-                                            f_str = jk.stringify(f,{recursive:false});
-                                        }
-                                        var t_str = jk.stringify(t,{recursive:false});
-                                        var vals_is_same = f_str == t_str;
-                                        if (!vals_is_same) {
-                                            if (change_indexes) {
-                                                change_indexes.paths.push(loop_path);
-                                                change_indexes.path_indexes[loop_path] = true;
-                                                if (change_indexes.path_str_indexes) {
-                                                    change_indexes.path_str_indexes[loop_path] = {
-                                                        same:jk.stringify(t,{recursive:false}),
-                                                        recursive:jk.stringify(t)
-                                                    };
-                                                }
-                                            }
-                                            if(str_indexes){
-                                                if(t_str != 'undefined'){
-                                                    str_indexes[loop_path] = t_str;
-                                                }
-                                            }
-                                            if(max_history == 0){
-                                                if(crc_indexes){
-                                                    if(t_str != 'undefined'){
-                                                        if(no_refs !== true){
-                                                            crc_indexes[loop_path] = t;
-                                                        }
-                                                    }
-                                                    else {
-                                                        delete crc_indexes[loop_path];
-                                                    }
-                                                }
-                                                if(crc_child_indexes){
-                                                    if(t_str != 'undefined'){
-                                                        //crc_child_indexes[loop_path] = t_str;
-                                                    }
-                                                    else {
-                                                        delete crc_child_indexes[parent_path][path_index];
-                                                        delete crc_child_indexes[loop_path];
-                                                    }
-                                                }
-                                                if(crc_str_indexes){
-                                                    if(t_str != 'undefined'){
-                                                        crc_str_indexes[loop_path] = t_str;
-                                                    }
-                                                    else {
-                                                        delete crc_str_indexes[loop_path];
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    var t_loopable = jk.is_loopable(t);
-                                    var fc_list = f;
-                                    if(crc_child_indexes && crc_child_indexes[loop_path]){
-                                        fc_list = crc_child_indexes[loop_path];
-                                    }
-                                    var f_loopable = jk.is_loopable(fc_list);
-                                    if (f_loopable) {
-                                        for (var fc_index in fc_list) {
-                                            var fc = fc_list[fc_index];
-                                            var fc_path = loop_path ? loop_path + '.' + fc_index : fc_index;
-                                            var continue_search = true;
-                                            if (ignore_js_type == 'regexp') {
-                                                if (ignore.test(fc_index)) {
-                                                    continue_search = false;
-                                                }
-                                            }
-                                            else if (ignore === fc_index) {
-                                                continue_search = false;
-                                            }
-                                            if (continue_search) {
-                                                var tc = t_loopable ? t[fc_index] : undefined;
-
-                                                from_diffs.push({
-                                                    'path': fc_path,
-                                                    // 'parent_path': loop_path,
-                                                    // 'path_index': fc_index,
-                                                    'f': fc,
-                                                    't': tc,
-                                                });
-                                            }
-                                        }
-                                    }
-                                }
-                                // get to diffs
-                                var to_diffs = [{
-                                    'path': path,
-                                    'f': cur_val,
-                                    't': value,
-                                }];
-                                for (var i = 0; i < to_diffs.length; i++) {
-                                    var args = to_diffs[i];
-
-                                    var loop_path = args.path;
-                                    // var path_index = args.path_index;
-                                    var f = args.f;
-                                    var t = args.t;
-
-                                    if(child_indexes && !child_indexes[loop_path]){
-                                        child_indexes[loop_path] = {};
-                                    }
-
-                                    if (indexes && !indexes.hasOwnProperty(loop_path)) {
-                                        indexes[loop_path] = t;
-                                        var f_str = undefined;
-                                        if(crc_str_indexes){
-                                            f_str = crc_str_indexes[loop_path] || jk.stringify();
-                                        }
-                                        if(!f_str){
-                                            f_str = jk.stringify(f,{recursive:false});
-                                        }
-                                        var t_str = jk.stringify(t,{recursive:false});
-                                        var vals_is_same = f_str == t_str;
-                                        if (!vals_is_same) {
-                                            if (change_indexes) {
-                                                change_indexes.paths.push(loop_path);
-                                                change_indexes.path_indexes[loop_path] = true;
-                                                if (change_indexes.path_str_indexes) {
-                                                    change_indexes.path_str_indexes[loop_path] = {
-                                                        same:jk.stringify(t,{recursive:false}),
-                                                        recursive:jk.stringify(t),
-                                                    };
-                                                }
-                                            }
-                                            if(str_indexes){
-                                                str_indexes[loop_path] = t_str;
-                                            }
-                                            if(max_history == 0){
-                                                if(crc_indexes){
-                                                    if(t_str != 'undefined'){
-                                                        if(no_refs !== true){
-                                                            crc_indexes[loop_path] = t;
-                                                        }
-                                                    }
-                                                    else {
-                                                        delete crc_indexes[loop_path];
-                                                    }
-                                                }
-                                                if(crc_str_indexes){
-                                                    if(t_str != 'undefined'){
-                                                        crc_str_indexes[loop_path] = t_str;
-                                                    }
-                                                    else {
-                                                        delete crc_str_indexes[loop_path];
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    var t_loopable = jk.is_loopable(t);
-                                    if (t_loopable) {
-                                        for (var tc_index in t) {
-                                            var tc = t[tc_index];
-                                            var tc_path = loop_path ? loop_path + '.' + tc_index : tc_index;
-                                            var continue_search = true;
-                                            if (ignore_js_type == 'regexp') {
-                                                if (ignore.test(tc_index)) {
-                                                    continue_search = false;
-                                                }
-                                            }
-                                            else if (ignore === tc_index) {
-                                                continue_search = false;
-                                            }
-                                            if (continue_search) {
-                                                var fc = this.get({
-                                                    'path': tc_path,
-                                                    'instance': instance
-                                                });
-                                                to_diffs.push({
-                                                    'path': tc_path,
-                                                    // 'parent_path': loop_path,
-                                                    // 'path_index': tc_index,
-                                                    'f': fc,
-                                                    't': tc,
-                                                });
-                                                if(child_indexes && !child_indexes[loop_path][tc_index]){
-                                                    child_indexes[loop_path][tc_index] = true;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            cur_changes_indexes.text_indexes = cur_changes_indexes.paths.join('\n');
-
-                            if (cur_changes_indexes.paths.length > 0) {
-
-                                // reference unchanged refernce
-                                if (rev.current != '') {
-                                    
-                                    var prev_indexes = changes[rev.current].indexes;
-                                    if(no_refs !== true){
-                                        for (var i_i in prev_indexes) {
-                                            if (!cur_indexes.hasOwnProperty(i_i)) {
-                                                cur_indexes[i_i] = prev_indexes[i_i];
-                                            }
-                                        }
-                                    }
-
-                                    var prev_child_indexes = changes[rev.current].child_indexes;
-                                    if(prev_child_indexes && cur_child_indexes){
-                                        for(var i_i in prev_child_indexes){
-                                            if(!cur_child_indexes.hasOwnProperty(i_i)){
-                                                cur_child_indexes[i_i] = prev_child_indexes[i_i];
-                                            }
-                                        }
-                                    }
-
-                                    var prev_str_indexes = changes[rev.current].str_indexes;
-                                    if(prev_str_indexes && cur_str_indexes){
-                                        for(var i_i in prev_str_indexes){
-                                            if(!cur_str_indexes.hasOwnProperty(i_i)){
-                                                cur_str_indexes[i_i] = prev_str_indexes[i_i];
-                                            }
-                                        }
-                                    }
-                                    // merge old refs with new refs
-                                    if(path != '' && no_refs !== true){
-                                        var old_base = prev_indexes[''];
-                                        var base = jk.deep_copy_same(old_base);
-                                        cur_indexes[''] = base;
-                                        var cur_base_path = '';
-                                        var cur_base_ref = base;
-                                        for (var p_i in paths) {
-                                            var p = paths[p_i];
-                                            cur_base_path = cur_base_path == '' ? p : cur_base_path + '.' + p;
-                                            if (cur_base_path != path) {
-                                                var dcs = jk.deep_copy_same(prev_indexes[cur_base_path]);
-                                                cur_base_ref[p] = dcs;
-                                                cur_base_ref = dcs;
-                                                cur_indexes[cur_base_path] = dcs;
-                                            }
-                                            else {
-                                                cur_base_ref[p] = cur_indexes[path];
-                                                cur_base_ref = cur_indexes[path];
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                // save revision
-                                var rev_change = undefined;
-                                var rev_indexes = cur_indexes;
-                                if(no_refs === true){
-                                    if(path == ''){
-                                        rev_indexes = value;
-                                    }
-                                    else {
-                                        var cur_path_parent = paths.slice(0, -1).join('.');
-                                        var cur_val_parent = this.get({
-                                            'path': cur_path_parent,
-                                            'instance': instance
-                                        });
-                                        var is_loopable_cur_val_parent = jk.is_loopable(cur_val_parent);
-                                        if (is_loopable_cur_val_parent) {
-                                            var last_prop_path = paths.slice(-1).join('.');
-                                            cur_val_parent[last_prop_path] = value;
-                                            var prev_indexes = changes[rev.current].indexes;
-                                            rev_indexes = prev_indexes;
-                                        }
-                                    }
-                                }
-                                if(rev.max_history != 0 || rev.current == ''){
-                                    var rev_guid = jk.huid();
-                                    var cur_branches = {};
-                                    if (rev.current) {
-                                        cur_branches = { from: rev.current }
-                                        var prev_branches = changes[rev.current].branches;
-                                        if (!prev_branches.to) {
-                                            prev_branches.to = {};
-                                        }
-                                        prev_branches.to[rev_guid] = true;
-                                    }
-
-                                    var prev_rev = rev.current;
-
-                                    var rev_change = {
-                                        'diffs': cur_changes_indexes,
-                                        'indexes': rev_indexes,
-                                        'branches': cur_branches,
-                                        'date': new Date().getTime()
-                                    };
-                                    changes[rev_guid] = rev_change;
-                                    rev.current = rev_guid;
-                                }
-                                else if(rev.max_history == 0){
-                                    rev_change = changes[rev.current];
-                                    rev_change['indexes'] = rev_indexes;
-                                }
-                                
-
-                                if(cur_child_indexes){
-                                    rev_change['child_indexes'] = cur_child_indexes;
-                                }
-
-                                if(cur_str_indexes){
-                                    rev_change['str_indexes'] = cur_str_indexes;
-                                }
-
-                                if (min_diffs) {
-                                    var vals = this.get({'path':'',history:1});
-                                    var cur_rootval_str = jk.stringify(vals[0]);
-                                    var min_diff = {
-                                        head: cur_rootval_str,
-                                        diffs: jk.diff(jk.stringify(vals[1]), cur_rootval_str, {ret_type:'transform'})
-                                    }
-                                    rev_change['min_diffs'] = min_diff;
-                                    // console.log(min_diff.diffs);
-                                }
-
-
-
-                                // keep desired history
-                                if (rev.max_history > 0 && isFinite(rev.max_history)) {
-                                    jk.traverse_fun({
-                                        'fn': function(args, fn) {
-                                            var rev = args.instance.rev;
-                                            var rev_changes = rev.changes;
-                                            var cur_rev_change = rev_changes[args.target_rev];
-                                            var crbf = cur_rev_change ? cur_rev_change.branches.from : undefined;
-                                            if (crbf) {
-                                                fn({
-                                                    'target_rev': crbf,
-                                                    'branch_level': args.branch_level + 1,
-                                                    'instance': args.instance
-                                                }, fn);
-                                            }
-                                            // TODO? remove .from from last?
-                                            if (rev.max_history < args.branch_level) {                            
-                                                delete rev_changes[args.target_rev];
-                                            }
-                                        },
-                                        'fn_args': {
-                                            'target_rev': rev.current,
-                                            'branch_level': 0,
-                                            'instance': instance
-                                        }
-                                    });
-                                }
-
-                                // collect subscribers with changes awaiting
-                                var sub_event_list = [];
-                                var instance_sub_list = instance.sub.list;
-                                for (var i = 0; i < instance_sub_list.length; i++) {
-                                    var sub = instance_sub_list[i];
-                                    var path_type = jk.type(sub.path);
-                                    if (path_type == 'String') {
-                                        var change_index = cur_changes_indexes.path_indexes[sub.path];
-                                        if (change_index != undefined) {
-                                            sub_event_list.push({
-                                                'sub': sub,
-                                                'paths': [sub.path]
-                                            });
-                                        }
-                                    }
-                                    else if (path_type == 'RegExp') {
-                                        var matches = cur_changes_indexes.text_indexes.match(sub.path);
-                                        if (matches != null) {
-                                            if (!sub.once) {
-                                                for (var j = 0; j < matches.length; j++) {
-                                                    var match = matches[j];
-                                                    var change_index = cur_changes_indexes.path_indexes[match];
-                                                    if (change_index != undefined) {
-                                                        sub_event_list.push({
-                                                            'sub': sub,
-                                                            'paths': [match]
-                                                        });
-                                                    }
-                                                }
-                                            }
-                                            else {
-                                                var change_indexes = [];
-                                                for (var j = 0; j < matches.length; j++) {
-                                                    var match = matches[j];
-                                                    var change_index = cur_changes_indexes.path_indexes[match];
-                                                    if (change_index != undefined) {
-                                                        change_indexes.push(change_index);
-                                                    }
-                                                }
-                                                if (change_indexes.length > 0) {
-                                                    sub_event_list.push({
-                                                        'sub': sub,
-                                                        'paths': matches
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                // notify subscribers
-                                for (var i = 0; i < sub_event_list.length; i++) {
-                                    var sli = sub_event_list[i];
-                                    var sub_data = {
-                                        'paths': sli.paths
-                                    };
-                                    // fn_apply? fn_context?
-                                    sli.sub.fn.call(this, sub_data, sli.sub.fn_args);
-                                }
-                            }
-                        }
-                    },
-
-                    on: function on(a0, a1, a2, a3) {
-                        var a = jk.get_arguments([a0, a1, a2, a3]);
-                        var has_val = false;
-                        var path, instance, namespace, fn, fn_args, once, run;
-
-                        var typeofs = jk.get_typeofs(a);
-
-                        if (a.length == 1) {
-                            if (typeofs[0] == 'object') {
-                                path = a0.p || a0.path || '';
-                                instance = a0.instance || this._instance;
-                                namespace = a0.n || a0.namespace || '';
-                                fn = a0.f || a0.fn;
-                                fn_args = a.fa || a0.fn_args;
-                                once = a0.o || a0.once;
-                                run = a0.r || a0.run;
-
-                                has_val = true;
-                            }
-                        }
-                        else if (a.length == 2) {
-                            if ((typeofs[0] == 'regexp' || typeofs[0] == 'string') && typeofs[1] == 'function') {
-                                path = a[0] || '';
-                                instance = this._instance;
-                                namespace = '';
-                                fn = a[1];
-
-                                has_val = true;
-                            }
-                        }
-                        else if (a.length == 3) {
-                            if ((typeofs[0] == 'regexp' || typeofs[0] == 'string') && typeofs[1] == 'boolean' && typeofs[2] == 'function') {
-                                path = a[0] || '';
-                                instance = this._instance;
-                                namespace = '';
-                                fn = a[2];
-                                once = a[1];
-
-                                has_val = true;
-                            }
-                            else if ((typeofs[0] == 'regexp' || typeofs[0] == 'string') && typeofs[1] == 'string' && typeofs[2] == 'function') {
-                                path = a[0] || '';
-                                instance = this._instance;
-                                namespace = a[1] || '';
-                                fn = a[2];
-
-                                has_val = true;
-                            }
-                        }
-
-                        if (has_val && fn) {
-                            var sli = {
-                                'path': path,
-                                'fn': fn,
-                                'fn_args': fn_args,
-                                'namespace': namespace,
-                                'once': once
-                            };
-                            instance.sub.list.push(sli);
-                            if(run){
-                                fn.call(this, {paths:[]}, fn_args);
-                            }
-                        }
-                    },
-                    off: function off(args) {
-                        var args_typeof = jk.typeof(args);
-                        var instance = this._instance;
-                        var instance_sub_list = instance.sub.list;
-                        for (var i = instance_sub_list.length - 1; i >= 0; i--) {
-                            var sub = instance_sub_list[i];
-                            var remove = false;
-                            var ns = sub.namespace;
-                            if (args_typeof == 'string') {
-                                if (args == ns) {remove = true; }
-                            }
-                            if (args_typeof == 'regexp') {
-                                if (args.test(ns)) {remove = true; }
-                            }
-                            if (remove) { instance_sub_list.splice(i, 1); }
-                        }
-                    },
-                    
-
-                    debug: function debug(args){
-                        var ns = 'internal_jSub_debugger';
-                        this.off(ns);
-                        if (args){
-                            this.on({path:/^.*$/gm, namespace:ns, fn: function(e){
-                                var val = jk.stringify(this.get(e.paths[0]), {recursive:false});
-                                var log = [e.paths[0], val].join(' : ');
-                                console.log(["'",log,"'"].join(''));
-                                if(args === log){
-                                    // Step through stack trace 
-                                    // to locate where this value is set
-                                    debugger;
-                                }
-                            }});
-                            this._instance.sub.list.sort(function sort_ns_first(a, b){
-                                if(a.namespace == ns) return -1;
-                                else if(b.namespace == ns) return 1;
-                                return 0;
-                            });
-                        }
-                    },
-
-                    mirror: function mirror(args){
-                        var cur_inst = this;
-                        var inst = args.instance;
-
-                        var path = args.path || '';
-                        var from_path = args.from_path || '';
-                        var merge = args.merge != null ? args.merge : false;
-                        // copy from whom ? inst always?
-
-                        var copy = args.copy != null ? args.copy : true;
-                        if(merge){
-                            var val = jk.merge(cur_inst.get(path), inst.get(from_path));
-                            cur_inst.set({'path':path,'value':val});
-                        }
-                        else if(copy){
-                            cur_inst.set({'path':path,'value':inst.get(from_path)});
-                        }
-
-                        var ns = args.namespace || jk.huid();
-
-                        var i_regex = new RegExp('^'+from_path+'.*$','gm');
-                        inst.on({'path':i_regex,'once':true,'namespace':ns,'fn':function(e){
-                            cur_inst.set({'path':path,'value':inst.get({'path':from_path})});
-                        }});
-
-                        var ci_regex = new RegExp('^'+path+'.*$','gm');
-                        cur_inst.on({'path':ci_regex,'once': true,'namespace': ns,'fn': function(e){
-                            inst.set({'path':from_path,'value':cur_inst.get({'path':path})});
-                        }});
-                        
-                        return ns;
-                    }
-                };
-                return jSub;
-            })(),
             
-            Agent: (function(){
-                function Agent(options){
+            agent: (function(){
+                function agent(options){
                     var s = this;
-                    if (jk.instance_of(s, jk.Agent)){
+                    if (jk.instance_of(s, jk.agent)){
                         s._instance = {
                             'missions': [],
                             'current': -1,
@@ -1918,10 +1053,10 @@
                         };
                     }
                     else {
-                        return new jk.Agent(options);
+                        return new jk.agent(options);
                     }
                 }
-                Agent.prototype = {
+                agent.prototype = {
                     default_options: {
                         'catch_error': true,
                         'capture_performance': true,
@@ -1989,16 +1124,22 @@
                         instance.missions = cur_missions.slice(0, index).concat(missions).concat(cur_missions.slice(index));
                     },
                     next: function next(){
-                        var instance = this._instance;
+                        var self = this;
+                        var instance = self._instance;
 
                         if(instance.is_paused){
                             return;
                         }
 
                         if (instance.current > -1) {
-                            var on_mission_finish = this.get_option('on_mission_finish');
+                            var on_mission_finish = self.get_option('on_mission_finish');
                             if (typeof on_mission_finish == 'function') {
-                                on_mission_finish.call(this);
+                                on_mission_finish.call(self);
+                            }
+                            else {
+                                var cur_mission = instance.missions[instance.current];
+                                var mission_name = jk.pathval([cur_mission,'name']) || (instance.current+1);
+                                console.log('Mission ' + mission_name +' - completed after ' + (new Date().getTime()-instance.last_mission_time) + 'ms');
                             }
                         }
 
@@ -2010,48 +1151,50 @@
                             var ct_fn_args = cur_mission.fn_args;
                             var ct_fn_apply = cur_mission.fn_apply;
                             instance.last_mission_time = new Date().getTime();
-                            var catch_error = this.get_option('catch_error');
+                            var catch_error = self.get_option('catch_error');
                             if (catch_error) {
                                 try{
                                     if (ct_fn_apply) {
-                                        ct_fn.apply(this, ct_fn_apply);
+                                        ct_fn.apply(self, ct_fn_apply);
                                     }
                                     else {
-                                        ct_fn.call(this, ct_fn_args);
+                                        ct_fn.call(self, ct_fn_args);
                                     }
                                 }
                                 catch(e){
                                     var mission_name = jk.pathval([cur_mission,'name']) || (instance.current+1);
-                                    var on_mission_fail = this.get_option('on_mission_fail');
+                                    var on_mission_fail = self.get_option('on_mission_fail');
                                     if (typeof on_mission_fail == 'function') {
-                                        on_mission_fail.call(this);
+                                        on_mission_fail.call(self, e);
                                     }
-                                    console.log('Mission ' + mission_name +' - failed after ' + (new Date().getTime()-instance.last_mission_time) + 'ms');
-                                    console.log(e);
+                                    else {
+                                        console.log('Mission ' + mission_name +' - failed after ' + (new Date().getTime()-instance.last_mission_time) + 'ms');
+                                        console.log(e);
+                                    }
                                 }
                             }
                             else {
                                 if (ct_fn_apply) {
-                                    ct_fn.apply(this, ct_fn_apply);
+                                    ct_fn.apply(self, ct_fn_apply);
                                 }
                                 else {
-                                    ct_fn.call(this, ct_fn_args);
+                                    ct_fn.call(self, ct_fn_args);
                                 }
                             }
                             if (cur_mission.async !== true) {
-                                this.next();
+                                self.next();
                             }
                         }
                         else if (instance.missions.length == 0) {
                             instance.is_running = false;
-                            var on_missing_missions = this.get_option('on_missing_missions');
+                            var on_missing_missions = self.get_option('on_missing_missions');
                             if (typeof on_missing_missions == 'function') {
-                                on_missing_missions.call(this);
+                                on_missing_missions.call(self);
                             }
                         }
                         else {
                             instance.is_running = false;
-                            var on_complete = this.get_option('on_complete');
+                            var on_complete = self.get_option('on_complete');
                             if (typeof on_complete == 'function') {
                                 on_complete.call(this);
                             }
@@ -2059,13 +1202,13 @@
                     }
                 };
 
-                return Agent;
+                return agent;
             })(),
 
-            Animator: (function(){
-                function Animator(args){};
+            animator: (function(){
+                function animator(args){};
 
-                Animator.prototype = {
+                animator.prototype = {
                     queue: [],
                     id: -1,
                     is_animating: false,
@@ -2074,7 +1217,7 @@
                         if (args_typeof == 'object') {
                             var from = args.from;
                             var to = args.to;
-                            var fn = args.fn;
+                            var fn = args.f || args.fn;
                             if (typeof(from) == 'number' && 
                                 typeof(to) == 'number' && 
                                 typeof(fn) == 'function') {
@@ -2107,7 +1250,7 @@
                         }
                     },
                     tick: function tick(timestamp){
-                        var self = jk.Animator.prototype;
+                        var self = jk.animator.prototype;
                         var continue_animating = false;
                         var cur_time = new Date().getTime();
                         var queue = self.queue;
@@ -2145,7 +1288,7 @@
                     },
                     stop: function stop(args) {
                         var args_typeof = jk.typeof(args);
-                        var self = jk.Animator.prototype;
+                        var self = jk.animator.prototype;
                         var queue = self.queue;
                         for (var i = queue.length - 1; i >= 0; i--) {
                             var ani = queue[i];
@@ -2162,126 +1305,186 @@
                     }
                 };
 
-                return Animator;
+                return animator;
             })(),
+
+            benchmark: function benchmark(args) {
+                var sf = args.sf; // setup function
+                var f = args.f; //function
+                var ff = args.ff; // finish function
+
+                var c = args.c || {};// context
+
+                var d = args.d || 10000; //duration
+                var a = args.a; // async
+                var cb = args.cb; // callback
+
+                if(sf){
+                    sf.call(c);
+                }
+
+                var start_time = new Date().getTime(); // use perfomance.now?
+                var end_time = start_time + d;
+
+                var total_runs = 0;
+                if(!a && !cb){ // sync
+                    while(new Date().getTime() < end_time){
+                        f.call(c);
+                        total_runs++;
+                    }
+                    var cur_time = new Date().getTime();
+                    var average_run_time = (cur_time - start_time) / total_runs;
+                    if(ff){
+                        ff.call(c);
+                    }
+                    return { 
+                        average_run_time: average_run_time, 
+                        total_runs: total_runs 
+                    }
+                }
+                else { // async
+                    function next() {
+                        total_runs++;
+                        var cur_time = new Date().getTime();
+                        if(cur_time < end_time){
+                            f.call(c);
+                        }
+                        else {
+                            var final_end_time = cur_time;
+                            var average_run_time = (final_end_time - start_time) / total_runs;
+                            if(ff){
+                                ff.call(c);
+                            }
+                            if(cb){
+                                cb({ 
+                                    average_run_time: average_run_time, 
+                                    total_runs: total_runs 
+                                });
+                            }
+                        }
+                    }
+                    c.next = next;
+                    f.call(c);
+                }
+            },
 
             raf: function raf(fn){ return req_ani_frame(fn); },
             caf: function caf(fn){ return can_ani_frame(fn); },
 
-            stringify: function stringify(ref, options) {
-                var jss_parts = [];
-                this.stringify_recursive({
-                    'val': ref,
-                    'jss_parts': jss_parts,
-                    'options': options
-                });
-                return jss_parts.join('');
-            },
-            stringify_recursive: function stringify_recursive(args, level) {
-                var jss_parts = args.jss_parts;
-                var val = args.val;
-                var args = /object/.test(jk.typeof(args)) ? args : {};
-                var options = /object/.test(jk.typeof(args.options)) ? args.options : {};
-                var level = /number/.test(jk.typeof(level)) ? level : 0;
-                var val_typeof = jk.typeof(val);
-
-                var tabs = '';
-                if (options.beautify) {
-                    for(var i = 0; i < level; i++){
-                        tabs += options.tab || '\t';
+            stringify: (function() {
+                function stringify(ref, options) {
+                    var jss_parts = [];
+                    var self = jk.stringify.prototype;
+                    self.stringify_recursive({
+                        'val': ref,
+                        'jss_parts': jss_parts,
+                        'options': options
+                    });
+                    return jss_parts.join('');
+                }
+                stringify.prototype = {
+                    stringify_recursive: function stringify_recursive(args, level) {
+                        var jss_parts = args.jss_parts;
+                        var val = args.val;
+                        var args = /object/.test(jk.typeof(args)) ? args : {};
+                        var options = /object/.test(jk.typeof(args.options)) ? args.options : {};
+                        var level = /number/.test(jk.typeof(level)) ? level : 0;
+                        var val_typeof = jk.typeof(val);
+                        var self = jk.stringify.prototype;
+                        var tabs = '';
+                        if (options.beautify) {
+                            for(var i = 0; i < level; i++){
+                                tabs += options.tab || '\t';
+                            }
+                        }
+        
+                        switch (true) {
+                            case val_typeof == 'object':
+                                jss_parts.push('{');
+                                var loop_index = 0;
+                                if (options.recursive !== false) {
+                                    for (var i in val) {
+                                        var v = val[i];
+                                        if (loop_index != 0) {
+                                            jss_parts.push(',');
+                                        }
+                                        if (options.beautify) {                                  
+                                            jss_parts.push('\n');
+                                            jss_parts.push(tabs);
+                                            jss_parts.push(options.tab || '\t');
+                                        }
+                                        jss_parts.push('"' + i.replace(/"/g,'\\"') + '":');
+                                        if (options.beautify) {                                  
+                                            jss_parts.push(' ');
+                                        }
+                                        self.stringify_recursive({
+                                            'val': v,
+                                            'jss_parts': jss_parts,
+                                            'options': options
+                                        }, level + 1);
+                                        loop_index++;
+                                    }
+                                }
+                                if (options.beautify && loop_index != 0) {
+                                    jss_parts.push('\n');
+                                    jss_parts.push(tabs);
+                                }
+                                jss_parts.push('}');
+                                break;
+                            case val_typeof == 'array':
+                                jss_parts.push('[');
+                                var loop_index = 0; 
+                                if (options.recursive !== false) {
+                                    for (var i = 0; i < val.length; i++) {
+                                        if (i != 0) {
+                                            jss_parts.push(',');
+                                        }
+                                        var v = val[i];
+                                        if (options.beautify) {
+                                            jss_parts.push('\n');
+                                            jss_parts.push(tabs);
+                                            jss_parts.push(options.tab || '\t');
+                                        }
+                                        self.stringify_recursive({
+                                            'val': v,
+                                            'jss_parts': jss_parts,
+                                            'options': options
+                                        }, level + 1);
+                                        loop_index++;
+                                    }
+                                }
+                                if (options.beautify && loop_index != 0) {
+                                    jss_parts.push('\n');
+                                    jss_parts.push(tabs);
+                                }
+                                jss_parts.push(']');
+                                break;
+                            case val_typeof == 'null':
+                                jss_parts.push('null');
+                                break;
+                            case val_typeof == 'undefined':
+                                jss_parts.push('undefined');
+                                break;
+                            case val_typeof == 'date':
+                                jss_parts.push('new Date('+val.getTime()+')');
+                                break;
+                            case val_typeof == 'string':
+                                jss_parts.push('"' + val.toString() + '"');
+                                break;
+                            default:// number|boolean|regexp|function
+                                jss_parts.push(val.toString());
+                                break;
+                        }
                     }
-                }
+                };
+                return stringify;
+            })(),
 
-                switch (true) {
-                    case val_typeof == 'object':
-                        jss_parts.push('{');
-                        var loop_index = 0;
-                        if (options.recursive !== false) {
-                            for (var i in val) {
-                                var v = val[i];
-                                if (loop_index != 0) {
-                                    jss_parts.push(',');
-                                }
-                                if (options.beautify) {                                  
-                                    jss_parts.push('\n');
-                                    jss_parts.push(tabs);
-                                    jss_parts.push(options.tab || '\t');
-                                }
-                                jss_parts.push('"' + i.replace(/"/g,'\\"') + '":');
-                                if (options.beautify) {                                  
-                                    jss_parts.push(' ');
-                                }
-                                this.stringify_recursive({
-                                    'val': v,
-                                    'jss_parts': jss_parts,
-                                    'options': options
-                                }, level + 1);
-                                loop_index++;
-                            }
-                        }
-                        if (options.beautify && loop_index != 0) {
-                            jss_parts.push('\n');
-                            jss_parts.push(tabs);
-                        }
-                        jss_parts.push('}');
-                        break;
-                    case val_typeof == 'array':
-                        jss_parts.push('[');
-                        var loop_index = 0; 
-                        if (options.recursive !== false) {
-                            for (var i = 0; i < val.length; i++) {
-                                if (i != 0) {
-                                    jss_parts.push(',');
-                                }
-                                var v = val[i];
-                                if (options.beautify) {
-                                    jss_parts.push('\n');
-                                    jss_parts.push(tabs);
-                                    jss_parts.push(options.tab || '\t');
-                                }
-                                this.stringify_recursive({
-                                    'val': v,
-                                    'jss_parts': jss_parts,
-                                    'options': options
-                                }, level + 1);
-                                loop_index++;
-                            }
-                        }
-                        if (options.beautify && loop_index != 0) {
-                            jss_parts.push('\n');
-                            jss_parts.push(tabs);
-                        }
-                        jss_parts.push(']');
-                        break;
-                    case val_typeof == 'null':
-                        jss_parts.push('null');
-                        break;
-                    case val_typeof == 'undefined':
-                        jss_parts.push('undefined');
-                        break;
-                    case val_typeof == 'date':
-                        jss_parts.push('new Date('+val.getTime()+')');
-                        break;
-                    case val_typeof == 'string':
-                        jss_parts.push('"' + val.toString() + '"');
-                        break;
-                    default:// number|boolean|regexp|function
-                        jss_parts.push(val.toString());
-                        break;
-                }
-            },
-            // validate: function(ref, options){},
-            // validate_recursive: function(args, level) {},
-
-            // IMPORTANT TODO - make secure remove support for self executing functions
-            // Should never be used on client
             parse: function parse(ref, options) {
                 var ret_val = eval('(function(){ return ' + ref + '; })();');
                 return ret_val;
             },
-            // parse_recursive: function(args, level) {},
             
-            // fix circular reference?
             instance_of: function instance_of(object, constructor) {
                 object = object.__proto__;
                 while (object != null) {
@@ -2333,7 +1536,7 @@
             },
             construct: function construct(obj){
                 var constructors = obj.__proto__.constructors;
-                if(constructors.__proto__ == Array.prototype){
+                if(constructors && constructors.__proto__ == Array.prototype){
                     for(var i = 0; i < constructors.length; i++){
                         var fn = constructors[i];
                         fn.call(obj);
@@ -2341,7 +1544,6 @@
                 }
             },
 
-            // merge prop filter
             merge: function merge(ref1, ref2, deep_copy){
                 var merge;
                 var ref1_typeof = jk.typeof(ref1);
@@ -2377,7 +1579,6 @@
                 }
                 return merge;
             },
-
             merge_to: function merge_to(from, to, options) {
                 var searched = {};
                 var props = [{
@@ -2430,12 +1631,12 @@
                         for(var i = 0; i < vals.length; i++){
                             var val = vals[i];
                             if(options.traverse) options.traverse(val, options);
+                            start_break = strs.length == 0 ? '' : end_break;
                             var val_typeof = jk.typeof(val);
                             if(val_typeof == 'string'){
-                                strs.push(val);
+                                strs.push([start_break,val].join(''));
                                 continue;
                             }
-                            start_break = strs.length == 0 ? '' : end_break;
                             var attrs = [];
                             for(var vli_i in val){
                                 if(keywords[vli_i]) continue;
@@ -2450,7 +1651,7 @@
                             var attrs_str = attrs.length == 0 ? '': ' ' + attrs.join(' ');
                             if(val.t) strs.push([start_break,'<',val.t,attrs_str,'>'].join(''));
                             if(val.tso) strs.push([start_break,'<',val.tso,attrs_str,'>'].join(''));
-                            if(val.tsc) strs.push([start_break,'</',val.tso,attrs_str,'>'].join(''));
+                            if(val.tsc) strs.push([start_break,'<',val.tsc,attrs_str,'/>'].join(''));
 
                             if(val.c) {
                                 s.traverse(val.c, options, strs, level+1);
@@ -2523,6 +1724,74 @@
                 };
                 return js_to_css;
             })(),
+
+            html_to_dom: (function() {
+                function html_to_dom(html, args) {
+                    var temp_div = document.createElement('div');
+                    temp_div.innerHTML = html;
+                    hp.generate({ dom_node: temp_div, args: args });
+                    return temp_div;
+                }
+                var hp = html_to_dom.prototype = {
+                    generate: function generate(options) {
+                        var dom_node = options.dom_node;
+                        var args = options.args;
+                        var jk_doms = dom_node.querySelectorAll('[jk]');
+                        var i = jk_doms.length;
+                        while (i--) {
+                            var li = jk_doms[i];
+                            var jk_attr = li.getAttribute('jk');
+                            li.removeAttribute('jk');                            
+                            var jka_val = { type: jk_attr };
+                            try {
+                                jka_val = jk.parse(jk_attr);
+                            } catch (e) {}
+                            var jka_type = jka_val.t || jka_val.type;
+                            var jka_module = jk.dom_modules[jka_type];
+                            if(jka_module && jka_module.html){
+                                var jka_object = {};
+                                var jkao_dp = jk.html_to_dom(jka_module.html);
+                                var jkao_dom_nodes = jkao_dp.children;
+                                var li_parent = jka_object.parent = li.parentNode;
+                                jka_object.dom_nodes = li_parent.children;
+                                var attrs = li.attributes;
+                                var j = jkao_dom_nodes.length;
+                                while (j--) {
+                                    var jkaodn = jkao_dom_nodes[j];
+                                    jkaodn.jk = jka_object;
+                                    if (li.hasAttributes()) {
+                                        var k = attrs.length;
+                                        while (k--) {
+                                            var attr = attrs[k];
+                                            var attr_name = attr.name;
+                                            var attr_value = attr.value;
+                                            var jk_attr_value = jkaodn.getAttribute(attr_name);
+                                            if(attr_name == 'class'){
+                                                jkaodn.setAttribute(attr_name, jk_attr_value ? [jk_attr_value,attr_value].join(' '): attr_value);
+                                            }
+                                            else if(attr_name == 'style'){
+                                                jkaodn.setAttribute(attr_name, jk_attr_value ? [jk_attr_value,attr_value].join(''): attr_value);
+                                            }
+                                            else {
+                                                jkaodn.setAttribute(attr_name, attr_value);
+                                            }
+                                        }
+                                    }
+                                    li_parent.insertBefore(jkaodn, li.nextSibling);
+                                }
+                                li_parent.removeChild(li);
+                                hp.generate({ dom_node: li_parent, args: args });
+                                if(jka_module.on_init){
+                                    jka_module.on_init.call(jka_object);
+                                }
+                            }
+                        }
+                    },
+                    modules: {},
+                };
+                return html_to_dom;
+            })(),
+            dom_modules: {},
 
             diff: function diff( old_str, new_str, options) {
                 var options = jk.typeof(options) == 'object' ? options : {};
@@ -2771,283 +2040,14 @@
                 return call;
             },
 
-            Layout: (function(){
-                function Layout(){
-                    var s = this;
-                    if (jk.instance_of(s, jk.Layout)){
-                        jk.construct(s);
-
-                        s.bind();
-                    }
-                    else {
-                        return new jk.Layout();
-                    }
-                }
-                
-                var lp = {
-                    __init__: function(){
-                        jk.proto_merge([jk.jSub, jk.Layout]);
-
-                        var sub = lp.sub = new jk.jSub({max_history: 0});
-
-                        sub.set('', { rules:{}});
-
-                        delete lp.__init__;
-                    },
-                    bind: function(){
-                        var s = this;
-
-                        s._instance.rev.max_history = 0;
-                        
-                        var id = s.id = jk.huid();
-
-                        var psub = s.sub;
-
-                        // parent or/and parents ?!?!?
-
-                        s.set('',{
-                            pos: { x: 0, y: 0, z: 0 }, scale: { x: 0, y: 0, z: 0 },
-                            calc_pos: { x: 0, y: 0, z: 0 }, calc_scale: { x: 0, y: 0, z: 0 },
-                            // groups: {}, classes: [], class_rules: {}, parent: {},
-                            rules: {}, calcs: {},
-                            children: {}, children_len : 0,
-                            id: s.id, // group: s.id,
-                        });
-
-                        s.store = {};
-
-                        s.on(/^children.[^\.]+$/gm, s.fn_children);
-
-                        s.on(/^calcs.[^\.]+.out.sx$|^scale.x$/gm, true, s.fn_calc_scale_x);
-
-                        s.on(/^calcs.[^\.]+.out.sy$|^scale.y$/gm, true, s.fn_calc_scale_y);
-
-                        s.on(/^calcs.[^\.]+.out.px$|^pos.x$/gm, true, s.fn_calc_pos_x);
-
-                        s.on(/^calcs.[^\.]+.out.py$|^pos.y$/gm, true, s.fn_calc_pos_y);
-
-                        s.on('remove', s.fn_remove);
-
-                        var cur_rules = psub.get('rules');
-                        for(var cr_i in cur_rules){
-                            s.rule_bind({ sub: s, rule: cr_i });
-                        }
-                    },
-                    fn_children: function(e){
-                        var s = this, pat = jk.pathval_and_typeof;
-                        var store = s.store;
-                        var path = e.paths[0];
-                        var val = s.get(path);
-                        if(val){ // child added
-                            var pat_sub = pat([val,'p_ignore','sub']);
-                            if(pat_sub.typeof == 'object'){
-
-                                s.set('children_len', s.get('children_len') + 1);
-
-                                var child_name = path.replace(/^children./,'');
-                                var sub = store[path] = pat_sub.val;
-
-                                var cur_rules = sub.get('rules');
-                                for(var cr_i in cur_rules){
-                                    s.rule_bind({ sub: s, child_sub: sub, rule: cr_i});
-                                }
-                                s.on({ path: new RegExp('^' + path + '.rules.[^\.]+$','gm'), namespace: path, fn: function(e){
-                                    var rule_path = e.paths[0];
-                                    var val = sub.get(rule_path);
-                                    var rule_name = rule_path.replace(/^.*rules./,'');
-                                    var rule_args = { sub: s, child_sub: sub, rule: rule_name };
-                                    if(val){ // sub to layout rule
-                                        s.rule_bind(rule_args);
-                                    }
-                                    else { // unsub to layout rule
-                                        s.rule_unbind(rule_args);
-                                    }
-                                }});
-
-                                s.on({ path: path + '.remove', namespace: path, fn: function(e){
-                                    s.off(sub.id);
-                                }});
-                            }
-                        }
-                        else { // child removed
-                            s.off(path);
-                            store[path].off(path); // off id???
-                            delete store.path;
-                            s.set('children_len', s.get('children_len') - 1);
-                        }
-                    },
-                    fn_calc_scale_x: function(){
-                        var s = this, pat = jk.pathval_and_typeof;
-                        var sx = s.get('scale.x');
-                        var calcs = s.get('calcs');
-                        for(var cli_i in calcs){
-                            var cli = calcs[cli_i];
-                            var csx = pat([cli,'out','sx']);
-                            if(csx.typeof == 'number'){
-                                sx += csx.val;
-                            }
-                        }
-                        s.set('calc_scale.x', sx);
-                    },
-                    fn_calc_scale_y: function(){
-                        var s = this, pat = jk.pathval_and_typeof;
-                        var sy = s.get('scale.y');
-                        var calcs = s.get('calcs');
-                        for(var cli_i in calcs){
-                            var cli = calcs[cli_i];
-                            var csy = pat([cli,'out','sy']);
-                            if(csy.typeof == 'number'){
-                                sy += csy.val;
-                            }
-                        }
-                        s.set('calc_scale.y', sy);
-                    },
-                    fn_calc_pos_x: function(){
-                        var s = this, pat = jk.pathval_and_typeof;
-                        var px = s.get('pos.x');
-                        var calcs = s.get('calcs');
-                        for(var cli_i in calcs){
-                            var cli = calcs[cli_i];
-                            var cpx = pat([cli,'out','px']);
-                            if(cpx.typeof == 'number'){
-                                px += cpx.val;
-                            }
-                        }
-                        s.set('calc_pos.x', px);
-                    },
-                    fn_calc_pos_y: function(){
-                        var s = this, pat = jk.pathval_and_typeof;
-                        var py = s.get('pos.y');
-                        var calcs = s.get('calcs');
-                        for(var cli_i in calcs){
-                            var cli = calcs[cli_i];
-                            var cpy = pat([cli,'out','py']);
-                            if(cpy.typeof == 'number'){
-                                py += cpy.val;
-                            }
-                        }
-                        s.set('calc_pos.y', py);
-                    },
-                    fn_remove: function(){
-                        var s = this;
-                        var store = s.store;
-                        psub.off(id);
-                        s.off(/.*/);
-                        var re_child = /^children/;
-                        for(var sli_i in store){
-                            if(re_child.test(sli_i)){
-                                var sli = store[sli_i];
-                                sli.off(id);
-                            }
-                        }
-                    },
-                    rule_bind: function(args){
-                        var s = this;
-                        var psub = s.sub;
-                        var pat = jk.pathval_and_typeof;
-
-                        var rule = args.rule;
-
-                        var pat_crfns = psub.get('rules.'+rule);
-                        var pat_crfn = pat([psub.get('rules.'+rule+'.fn')]);
-                        var pat_crfn_on_created = pat([psub.get('rules.'+rule+'.fn_on_created')]);
-
-                        if(pat_crfn_on_created.typeof == 'function'){
-                            var cr_on_created = pat_crfn_on_created.val;
-                            cr_on_created( null, { args: args, fns: pat_crfns });
-                        }
-
-                        if(pat_crfn.typeof == 'function'){
-                            var cr_fn = pat_crfn.val;
-                            cr_fn( null, { args: args, fns: pat_crfns });
-                        }
-                        
-                    },
-                    rule_unbind: function(args){
-                        var s = this;
-                        var psub = s.sub;
-                        var pat = jk.pathval_and_typeof;
-
-                        var rule = args.rule;
-
-                        var pat_crfns = psub.get('rules.'+rule);
-                        var pat_crfn_on_deleted = pat([psub.get('rules.'+rule+'.fn_on_deleted')]);
-
-                        if(pat_crfn_on_deleted.typeof == 'function'){
-                            var cr_on_deleted = pat_crfn_on_deleted.val;
-                            cr_on_deleted( null, { args: args, fns: pat_crfns });
-                        }
-
-                        var sub = args.sub;
-                        var sub_rules = sub.get('rules');
-                        var pat_cur_calc_rule = pat([sub_rules, rule]);
-                        if(pat_cur_calc_rule.typeof == 'object'){
-                            delete sub_rules['rule'];
-                            sub.set('rules', sub.get('rules'));
-                        }
-                    },
-                };
-
-                if(env.browser){
-                    lp.canvas = document.createElement('canvas');
-                    lp.ctx = lp.canvas.getContext('2d');
-                    lp.measure_text = function measure_text(text, options){
-                        var options = options || {};
-                        var rules = options.rules || {};
-                        var word_type = rules.word_type || 'space_break';
-                        var font = rules.font || '16px serif';
-
-                        var height;
-
-                        var ctx = this.ctx;
-                        ctx.font = font;
-                        
-                        var res;
-
-                        if(word_type == 'space_break'){
-                            var words = text.split(' ');
-
-                            //ctx.measureText();
-                        }
-
-                        return res;
-                    }
-                }
-
-                Layout.prototype = lp;
-
-                
-                // s.on(/^groups.[^\.]+.members.[^\.]+$/gm, function(e){
-                //     var path = e.paths[0];
-                //     var val = s.get(path);
-
-                //     var group_name = path.replace(/^groups.|.members.[^\.]+$/g, '');
-                //     var member_name = path.replace(/^groups.[^\.]+.members./, '');
-                    
-                //     var group = s.get(path.replace(/^groups.[^\.]+/), '');
-                //     var member = s.get(path.replace(/^groups.[^\.]+.members.[^\.]+$/), '');
-                //     if(val){ // member added
-                //     }
-                //     else { // member removed
-                //     }
-                // });
-
-                return Layout;
-            })(),
-
             __init__: function(){
-                jSynk.prototype.fn = jSynk.prototype; 
-
                 jk.cias.prototype.__init__();
                 jk.huid.prototype.__init__();
-                jk.Layout.prototype.__init__();
 
-                delete jSynk.prototype.__init__;
+                delete jk.__init__;
             },
         };
 
-        var jk = new jSynk();
-        
         jk.__init__();
         
         return jk;

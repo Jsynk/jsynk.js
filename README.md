@@ -1,12 +1,12 @@
-# jsynk
+# jSynk.js
 
 ## Description
 
-A lib with many small simplified frameworks such as tools for javascript varibles 
-to pub/sub changes, parse to html, parse to css, convert to string including functions 
-and regex, testing, animating, diffing, benchmarking, modular html to dom converter and some other utilities.
+jSynk.js is a browser/node.js lib with many small simplified frameworks such as tools for javascript objects 
+to publish/subscribe changes, parse to html, parse to css, parse html to dom, convert to string including functions 
+and regex, testing, benchmarking, modular loader, animating, diffing, async parallel helper functions and other utilities.
 
-## demo js_to_html
+## js_to_html - inspired by angular, react/jsx
 
 ```js
 var js_html = [
@@ -47,7 +47,7 @@ console.log(html);
 //</html>
 ```
 
-## demo js_to_css
+## js_to_css - inspired by sass/scss
 
 ```js
 var js_css = [
@@ -76,9 +76,15 @@ console.log(css);
 //.res_20 .res_li{
 // 	margin:10px;
 //}
+var style = document.createElement('style');
+style.textContent = css;
+document.head.appendChild(style);
+setTimeout(function(){
+	document.head.removeChild(style);
+}, 5000);
 ```
 
-## demo html_to_dom
+## html_to_dom - inspired by angular.js, react.js
 
 ```js
 jk.dom_modules.test = {
@@ -118,15 +124,17 @@ var parent = jk.html_to_dom(html);
 var dom_nodes = parent.children;
 console.log(dom_nodes[0].outerHTML);
 /* 
-<div><b>Name:</b>
+<div>
+	<b>Name:</b>
     <div class="header test" style="font-size:10px;padding:10px;" tabindex="1"><b>header_title:</b></div>
     <div class="content test" tabindex="1" style="padding:10px;"><b>content_title:</b></div>
-    <div class="footer test" tabindex="1" style="padding:10px;"><b>footer_title:</b></div><input type="text">
+	<div class="footer test" tabindex="1" style="padding:10px;"><b>footer_title:</b></div>
+	<input type="text">
 </div>
 */
 ```
 
-## demo sub
+## sub - inspired by ember.js, backbone.js, redux
 
 ```js
 var s = jk.sub();
@@ -179,14 +187,10 @@ s.set({ v: undefined });
 console.log( s.get() ); 
 ```
 
-## demo sub.debug
+## sub.debug - inspired by my struggles to debug code
 
 ```js
 var s = jk.sub();
-// s.debug(1);
-// s.debug(true);
-// s.debug(/children/);
-// s.debug('children : []');
 s.debug({l:/.*/}); // will log all changes
 s.set({v:{ name: 'Ray', children: [ 'Amy', 'Alex' ] }});
 // ' : {}'
@@ -198,9 +202,10 @@ s.debug(); // will remove logging/stacktracing
 s.set({v:undefined});
 s.debug({s:'children : []'}); // stacktrace on match
 s.set({v:{ name: 'Ray', children: [ 'Amy', 'Alex' ] }});
+// watch stacktrace to see where this code was set
 ```
 
-## demo agent
+## agent - inspired by selenium, mocha.js, puppeteer
 
 ```js
 var agent = jk.agent({
@@ -222,7 +227,37 @@ agent.add_mission();
 // TODO
 ```
 
-## demo TODO
+## load - inspired by require.js
+
+```js
+// TODO
+```
+
+## register - inspired by require.js
+
+```js
+// TODO
+```
+
+## async_recursive - inspired by async.js
+
+```js
+// TODO
+```
+
+## async_parallel - inspired by async.js
+
+```js
+// TODO
+```
+
+## diff - inspired by git, svn, mercurial
+
+```js
+// TODO
+```
+
+## huid - inspired by guid
 
 ```js
 // TODO
@@ -241,7 +276,8 @@ npm install jsynk
 
 ## Compatibility
 
-Works in browser, Node.js and some frameworks that supports Asynchronous Module Definition (AMD).
+Works in browser, Node.js.
+Tries to be crossbrowser Chrome, Firefox, Edge, IE9+, Safari and use vanilla js.
 
 ## License
 

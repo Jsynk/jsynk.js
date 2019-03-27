@@ -2,11 +2,11 @@
 
 ## Description
 
-jSynk.js is a browser/node.js lib with many small simplified frameworks such as tools for javascript objects 
-to publish/subscribe changes, parse to html, parse to css, parse html to dom, convert to string including functions 
+jSynk.js is a small javascript framework the browser/node.js with functions to convert javascript objects 
+to publish/subscribe changes, to html, to css, html to dom, string including functions 
 and regex, testing, benchmarking, modular loader, animating, diffing, async parallel helper functions and other utilities.
 
-## js_to_html - inspired by angular, react/jsx
+## js_to_html - inspired by handlebars.js, angular, react/jsx
 
 ```js
 var js_html = [
@@ -123,15 +123,13 @@ var html = jk.js_to_html(js_html);
 var parent = jk.html_to_dom(html);
 var dom_nodes = parent.children;
 console.log(dom_nodes[0].outerHTML);
-/* 
-<div>
-	<b>Name:</b>
-    <div class="header test" style="font-size:10px;padding:10px;" tabindex="1"><b>header_title:</b></div>
-    <div class="content test" tabindex="1" style="padding:10px;"><b>content_title:</b></div>
-	<div class="footer test" tabindex="1" style="padding:10px;"><b>footer_title:</b></div>
-	<input type="text">
-</div>
-*/
+//<div>
+//	<b>Name:</b>
+//    <div class="header test" style="font-size:10px;padding:10px;" tabindex="1"><b>header_title:</b></div>
+//    <div class="content test" tabindex="1" style="padding:10px;"><b>content_title:</b></div>
+//	<div class="footer test" tabindex="1" style="padding:10px;"><b>footer_title:</b></div>
+//	<input type="text">
+//</div>
 ```
 
 ## sub - inspired by ember.js, backbone.js, redux
@@ -212,19 +210,85 @@ var agent = jk.agent({
 	on_start: function on_start() {
 		console.log('starting missions');
 	},
-	on_mission_finish: function on_mission_finish() {
-		console.log('starting missions');
+	on_mission_finish: function on_mission_finish(e) {
+		console.log('finished mission "'+e.mission.name+'" on '+e.time+'ms');
 	},
-	on_mission_fail: function on_mission_fail() {
-		console.log('starting missions');
+	on_mission_fail: function on_mission_fail(e) {
+		console.log('failed mission "'+e.mission.name+'" on '+e.time+'ms');
 	},
 	on_complete: function on_complete() {
-		console.log('completeted missions');
+		console.log('completed missions');
 	},
 });
 
-agent.add_mission();
-// TODO
+agent.add_mission({ name: 'sync', f:function() {
+	console.log('sync test');
+}});
+
+agent.add_mission({ name: 'async', f:function() {
+	setTimeout(function(){
+		console.log('async test');
+		agent.next();
+	}, 1000);
+}, async: true});
+
+agent.add_mission({ name: 'add dynamic test', f:function() {
+	console.log('adding dynamic test');
+	agent.add_instant_missions([
+		{ name: 'dynamic_test', f: function() {
+			console.log('run dynamic added test');
+		}}
+	]);
+}});
+
+agent.run_missions();
+// starting missions
+// sync test
+// finished mission "sync" on 2ms
+// async test
+// finished mission "async" on 1002ms
+// adding dynamic test
+// finished mission "add dynamic test" on 2ms
+// run dynamic added test
+// finished mission "dynamic_test" on 2ms
+// completed missions
+```
+
+## cias - inspired by compression int and string
+
+```js
+var cur_time = new Date().getTime();
+console.log(cur_time);
+// 1553598014102
+var cias_str = jk.cias(cur_time);
+console.log(cias_str);
+// "RLowwHW"
+var cias_int = jk.cias(cias_str);
+console.log(cias_int);
+// 1553598014102
+```
+
+## huid - inspired by guid and high resolution timestamp
+
+```js
+var huid = jk.huid();
+console.log(huid);
+// "RLoi2nQ_2JrMGP_P1x_AuUZ2S_3IAvUK"
+var huid_details = jk.huid(huid);
+console.log(huid_details);
+//{
+// 	boot_time: 1553594464224.2126,
+// 	boot_time_ms: 1553594464224,
+// 	boot_time_precision_decimal: 0.2125733017,
+// 	elapsed_time: 96221.9996087668,
+// 	elapsed_time_ms: 96221,
+// 	elapsed_time_precision_decimal: 0.9996087668,
+// 	final_time: 1553594560446.2122,
+// 	final_time_ms: 1553594560445,
+// 	final_time_precision_decimal: 1.2121820685,
+// 	nums: [1553594464224, 2125733017, 96221, 9996087668, 3016976812],
+// 	random_padding: 3016976812
+//}
 ```
 
 ## load - inspired by require.js
@@ -234,6 +298,12 @@ agent.add_mission();
 ```
 
 ## register - inspired by require.js
+
+```js
+// TODO
+```
+
+## stringify - inspired by JSON.stringify
 
 ```js
 // TODO
@@ -252,12 +322,6 @@ agent.add_mission();
 ```
 
 ## diff - inspired by git, svn, mercurial
-
-```js
-// TODO
-```
-
-## huid - inspired by guid
 
 ```js
 // TODO

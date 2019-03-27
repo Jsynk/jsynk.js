@@ -268,6 +268,10 @@
                         load_request.val = args;
                         load_request.loaded = true;
 
+                        if(args.on_load){
+                            args.on_load(load_request);
+                        }
+
                         var load_request_args = sl.load_request_args;
 
                         var dep_ids = load_request.dep_ids;
@@ -441,19 +445,18 @@
                 return cias;
             })(),
             huid: (function(){
-                function huid(){
-                    var huid = '';
-                    
-                    var p = jk.huid.prototype;
-
-                    if(p.generate){
-                        huid = p.generate();
+                function huid(args){
+                    var ret_val = null;
+                    var args_typeof = jk.typeof(args);
+                    if(args_typeof == 'string'){
+                        ret_val = hp.get_huid_times(args);
                     }
-
-                    return huid;
+                    else {
+                        ret_val = hp.generate();
+                    }
+                    return ret_val;
                 };
-
-                huid.prototype = {
+                var hp = huid.prototype = {
                     start_time: (new Date()).getTime(),
                     start_time_str: '',
                     seperator: '_',                    
@@ -466,24 +469,68 @@
                         return parseInt(str);
                     },
                     get_start_time_str: function get_start_time_str(){
-                        return jk.cias(this.start_time) + this.seperator + jk.cias((this.get_cur_times()[1])) + this.seperator;
+                        return jk.cias(hp.start_time) + hp.seperator + jk.cias((hp.get_cur_times()[1])) + hp.seperator;
                     },
                     get_cur_times: function get_cur_times(){
-                        var elapsed_time = (new Date()).getTime() - this.start_time;
-                        return [ elapsed_time, this.padding() ];
+                        var elapsed_time = (new Date()).getTime() - hp.start_time;
+                        return [ elapsed_time, hp.padding() ];
                     },
                     generate: function generate(){
-                        var cur_times = this.get_cur_times();
+                        var cur_times = hp.get_cur_times();
 
-                        var huid = this.start_time_str || '';
+                        var huid = hp.start_time_str || '';
 
-                        huid += jk.cias(cur_times[0]) + this.seperator + jk.cias(cur_times[1]) + this.seperator + jk.cias(this.padding());
+                        huid += jk.cias(cur_times[0]) + hp.seperator + jk.cias(cur_times[1]) + hp.seperator + jk.cias(hp.padding());
 
                         return huid;
                     },
+                    get_huid_times: function get_huid_times(args){
+                        var ret_val = null;
+                        var num_splits = args.split(hp.seperator);
+                        var nums = [];
+                        var i = num_splits.length;
+                        while (i--) {
+                            var num_split = num_splits[i];
+                            nums = [jk.cias(num_split)].concat(nums);
+                        }
+                        if(nums.length == 5){
+                            var boot_time_ms = nums[0];
+                            var boot_time_precision_decimal = parseFloat('0.'+'0000000000'.slice(0,10-(nums[1]+'').length) + nums[1]);
+                            var boot_time = boot_time_ms+boot_time_precision_decimal;
+
+                            var elapsed_time_ms = nums[2];
+                            var elapsed_time_precision_decimal = parseFloat('0.'+'0000000000'.slice(0,10-(nums[3]+'').length) + nums[3]);
+                            var elapsed_time = elapsed_time_ms+elapsed_time_precision_decimal;
+
+                            var final_time_ms = (boot_time_ms+elapsed_time_ms);
+                            var final_time_precision_decimal = (boot_time_precision_decimal+elapsed_time_precision_decimal);
+                            var final_time = final_time_ms+final_time_precision_decimal;
+
+                            ret_val = { 
+                                boot_time: boot_time,
+                                boot_time_ms: boot_time_ms,
+                                boot_time_precision_decimal: boot_time_precision_decimal,
+
+                                elapsed_time: elapsed_time,
+                                elapsed_time_ms: elapsed_time_ms,
+                                elapsed_time_precision_decimal: elapsed_time_precision_decimal,
+
+                                final_time: final_time,
+                                final_time_ms: final_time_ms,
+                                final_time_precision_decimal: final_time_precision_decimal,
+
+                                nums: nums,
+                                random_padding: nums[4],
+                            };
+                        }
+                        else {
+                            ret_val = { nums: nums };
+                        }
+                        return ret_val;
+                    },
                     __init__: function(){
-                        var huid_p = jk.huid.prototype;
-                        huid_p.start_time_str = huid_p.get_start_time_str();
+                        var hp = jk.huid.prototype;
+                        hp.start_time_str = hp.get_start_time_str();
 
                         delete jk.huid.prototype.__init__;
                     },
@@ -1074,9 +1121,9 @@
                         var mission = undefined;
                         var args_js_type = jk.typeof(args);
                         if (args_js_type == 'function') {
-                            mission = {'fn':args};
+                            mission = { f: args };
                         }
-                        else if (args_js_type == 'object' && typeof args.fn == 'function') {
+                        else if (args_js_type == 'object' && typeof (args.f || args.fn) == 'function') {
                             mission = args;
                         }
                         else if (args_js_type == 'array') {
@@ -1084,9 +1131,9 @@
                                 var m = args[i];
                                 var m_js_type = jk.typeof(m);
                                 if (m_js_type == 'function') {
-                                    this._instance.missions.push({'fn':m});
+                                    this._instance.missions.push({ f: m });
                                 }
-                                else if (m_js_type == 'object' && typeof m.fn == 'function') {
+                                else if (m_js_type == 'object' && typeof (m.f || m.fn) == 'function') {
                                     this._instance.missions.push(m);
                                 }
                             }
@@ -1134,7 +1181,10 @@
                         if (instance.current > -1) {
                             var on_mission_finish = self.get_option('on_mission_finish');
                             if (typeof on_mission_finish == 'function') {
-                                on_mission_finish.call(self);
+                                var cur_mission = instance.missions[instance.current];
+                                var mission_time = new Date().getTime()-instance.last_mission_time;
+                                var on_args = { mission: cur_mission, time: mission_time };
+                                on_mission_finish.call(self, on_args);
                             }
                             else {
                                 var cur_mission = instance.missions[instance.current];
@@ -1147,9 +1197,9 @@
                             instance.is_running = true;
                             instance.current++;
                             var cur_mission = instance.missions[instance.current];
-                            var ct_fn = cur_mission.fn;
-                            var ct_fn_args = cur_mission.fn_args;
-                            var ct_fn_apply = cur_mission.fn_apply;
+                            var ct_fn = cur_mission.f || cur_mission.fn;
+                            var ct_fn_args = cur_mission.fa || cur_mission.fn_args;
+                            var ct_fn_apply = cur_mission.fap || cur_mission.fn_apply;
                             instance.last_mission_time = new Date().getTime();
                             var catch_error = self.get_option('catch_error');
                             if (catch_error) {
@@ -1165,7 +1215,10 @@
                                     var mission_name = jk.pathval([cur_mission,'name']) || (instance.current+1);
                                     var on_mission_fail = self.get_option('on_mission_fail');
                                     if (typeof on_mission_fail == 'function') {
-                                        on_mission_fail.call(self, e);
+                                        var cur_mission = instance.missions[instance.current];
+                                        var mission_time = new Date().getTime()-instance.last_mission_time;
+                                        var on_args = { mission: cur_mission, time: mission_time, exception: e };
+                                        on_mission_fail.call(self, on_args);
                                     }
                                     else {
                                         console.log('Mission ' + mission_name +' - failed after ' + (new Date().getTime()-instance.last_mission_time) + 'ms');
@@ -1479,7 +1532,6 @@
                 };
                 return stringify;
             })(),
-
             parse: function parse(ref, options) {
                 var ret_val = eval('(function(){ return ' + ref + '; })();');
                 return ret_val;
@@ -1793,7 +1845,7 @@
             })(),
             dom_modules: {},
 
-            diff: function diff( old_str, new_str, options) {
+            diff: function diff(old_str, new_str, options) {
                 var options = jk.typeof(options) == 'object' ? options : {};
                 var splitter = options.splitter != undefined ? options.splitter : '';
                 var ret_type = options.ret_type || 'normal'; // transform

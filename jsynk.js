@@ -779,7 +779,7 @@
             },
             is_index_match: function is_index_match(args) {
                 var args_js_type = jk.typeof(args);
-                var ret_val;
+                var ret_val = false;
                 if (args_js_type == 'object') {
                     var index = args.index != null ? args.index : args.i;
                     var match = args.match != null ? args.match : args.m;
@@ -1260,7 +1260,6 @@
 
             animator: (function(){
                 function animator(args){};
-
                 animator.prototype = {
                     queue: [],
                     id: -1,
@@ -1357,38 +1356,114 @@
                         }
                     }
                 };
-
                 return animator;
             })(),
 
+            animate: (function() {
+                function animate(args) {
+                    var s = this;
+                    if (jk.instance_of(this, jk.animate)){
+                        var typeof_args = jk.typeof(args);
+                        if(typeof_args == 'object' || typeof_args == 'function'){
+                            var vals = this.vals = {
+                                from: 0, to: 1, f: function() {},
+                                duration: 500, n: '',
+                                start_time: new Date().getTime(),
+        
+                                diff_time: 0,
+                                abs_percent: 0, percent: 0,
+                                anim_percent: 0, cur_val: 0
+                            };
+                            if(typeof_args == 'object'){
+                                jk.merge_to(args, vals);
+                            }
+                            else if(typeof_args == 'function'){
+                                vals.f = args;
+                            }
+                            var queue = ap.queue;
+                            ap.queue = queue = [this].concat(queue);
+                            var is_animating = ap.is_animating;
+                            if(!is_animating && queue.length != 0){
+                                is_animating = ap.is_animating = true;
+                                jk.raf(ap.update);
+                            }
+                        }
+                    }
+                    else{
+                        return new jk.animate(args);
+                    }
+                }
+                var ap = animate.prototype = {
+                    is_animating: false,
+                    queue: [],
+                    update: function update() {
+                        var ap = jk.animate.prototype;
+                        var cur_time = new Date().getTime();
+                        var queue = ap.queue;
+                        var i = queue.length;
+                        while (i--) {
+                            var li = queue[i];
+                            var vals = li.vals;
+                            var diff_time = vals.diff_time = cur_time - vals.start_time;
+                            var abs_percent = vals.abs_percent = diff_time/vals.duration;
+                            var percent = vals.percent = abs_percent < 1 ? abs_percent : 1;// linear
+                            var anim_percent = vals.anim_percent = Math.sin((Math.PI/2)*percent); // swing
+                            vals.cur_val = vals.from + (vals.to-vals.from)*anim_percent;
+                            vals.f(li);
+                            if(percent == 1 || !jk.typeof(percent) == 'number'){
+                                queue.splice(i, 1);
+                            }
+                        }
+                        if(queue.length == 0){
+                            ap.is_animating = false;
+                        }
+                        else {
+                            jk.raf(ap.update);
+                        }
+                    },
+                    stop: function stop(args) {
+                        var queue = ap.queue;
+                        var i = queue.length;
+                        while (i--) {
+                            var li = queue[i];
+                            var vals = li.vals;
+                            var namespace = vals.n;
+                            if(this == li || jk.is_index_match({ i: namespace, m: args })){
+                                queue.splice(i, 1);
+                            }
+                        }
+                    }
+                };
+                return animate;
+            })(),
+
             benchmark: function benchmark(args) {
-                var sf = args.sf; // setup function
-                var f = args.f; //function
-                var ff = args.ff; // finish function
+                var on_load = args.on_load;
+                var on_reload = args.on_reload;
+                var on_unload = args.on_unload;
 
-                var c = args.c || {};// context
+                var context = args.context || args.c || {};
 
-                var d = args.d || 10000; //duration
-                var a = args.a; // async
-                var cb = args.cb; // callback
+                var duration = args.duration != null ? args.duration : 10000;
+                var callback = args.callback || args.cb;
 
-                if(sf){
-                    sf.call(c);
+                if(on_load){
+                    on_load.call(context);
                 }
 
                 var start_time = new Date().getTime(); // use perfomance.now?
-                var end_time = start_time + d;
+                var end_time = start_time + duration;
 
                 var total_runs = 0;
-                if(!a && !cb){ // sync
+                if(!callback){ // sync
                     while(new Date().getTime() < end_time){
-                        f.call(c);
+                        on_reload.call(context);
                         total_runs++;
                     }
                     var cur_time = new Date().getTime();
                     var average_run_time = (cur_time - start_time) / total_runs;
-                    if(ff){
-                        ff.call(c);
+                    if(on_unload){
+                        on_unload.call(context);
                     }
                     return { 
                         average_run_time: average_run_time, 
@@ -1400,24 +1475,24 @@
                         total_runs++;
                         var cur_time = new Date().getTime();
                         if(cur_time < end_time){
-                            f.call(c);
+                            on_reload.call(context);
                         }
                         else {
                             var final_end_time = cur_time;
                             var average_run_time = (final_end_time - start_time) / total_runs;
-                            if(ff){
-                                ff.call(c);
+                            if(on_unload){
+                                on_unload.call(context);
                             }
-                            if(cb){
-                                cb({ 
+                            if(callback){
+                                callback({ 
                                     average_run_time: average_run_time, 
                                     total_runs: total_runs 
                                 });
                             }
                         }
                     }
-                    c.next = next;
-                    f.call(c);
+                    context.next = next;
+                    on_reload.call(context);
                 }
             },
 

@@ -6,7 +6,7 @@ jSynk.js is a small javascript framework the browser/node.js with functions to c
 to publish/subscribe changes, to html, to css, html to dom, string including functions 
 and regex, testing, benchmarking, modular loader, animating, diffing, async parallel helper functions and other utilities.
 
-## js_to_html - inspired by handlebars.js, angular, react/jsx
+## js_to_html - inspired by handlebars.js, angular.js, react.js/jsx
 
 ```js
 var js_html = [
@@ -47,7 +47,7 @@ console.log(html);
 //</html>
 ```
 
-## js_to_css - inspired by sass/scss
+## js_to_css - inspired by sass/scss, LESS and Stylus
 
 ```js
 var js_css = [
@@ -125,14 +125,14 @@ var dom_nodes = parent.children;
 console.log(dom_nodes[0].outerHTML);
 //<div>
 //	<b>Name:</b>
-//    <div class="header test" style="font-size:10px;padding:10px;" tabindex="1"><b>header_title:</b></div>
-//    <div class="content test" tabindex="1" style="padding:10px;"><b>content_title:</b></div>
+//	<div class="header test" style="font-size:10px;padding:10px;" tabindex="1"><b>header_title:</b></div>
+//	<div class="content test" tabindex="1" style="padding:10px;"><b>content_title:</b></div>
 //	<div class="footer test" tabindex="1" style="padding:10px;"><b>footer_title:</b></div>
 //	<input type="text">
 //</div>
 ```
 
-## sub - inspired by ember.js, backbone.js, redux
+## sub - inspired by ember.js, backbone.js, redux.js
 
 ```js
 var s = jk.sub();
@@ -254,6 +254,12 @@ agent.run_missions();
 // completed missions
 ```
 
+## benchmark - inspired by benchmark.js
+
+```js
+// TODO
+```
+
 ## cias - inspired by compression int and string
 
 ```js
@@ -306,7 +312,124 @@ console.log(huid_details);
 ## stringify - inspired by JSON.stringify
 
 ```js
-// TODO
+var obj = {
+	bool: true, str: '!', num: 1,
+	infinity: Infinity, nan: NaN,
+	null: null, undefined: undefined,
+	function: function(){}, regex: /^\d+$/gm, date: new Date()
+};
+var jk_str = jk.stringify(obj, {beautify:true});
+console.log(jk_str);
+// {
+// 	"bool": true,
+// 	"str": "!",
+// 	"num": 1,
+// 	"infinity": Infinity,
+// 	"nan": NaN,
+// 	"null": null,
+// 	"undefined": undefined,
+// 	"function": function(){},
+// 	"regex": /^\d+$/gm,
+// 	"date": new Date(1553998399486)
+// }
+var json_str = JSON.stringify(obj, null, '\t');
+console.log(json_str);
+// {
+// 	"bool": true,
+// 	"str": "!",
+// 	"num": 1,
+// 	"infinity": null,
+// 	"nan": null,
+// 	"null": null,
+// 	"regex": {},
+// 	"date": "2019-03-31T02:13:19.486Z"
+// }
+var obj_from_jk_str = jk.parse(jk_str);
+// jk.parse function "DANGEROUS TO SAVE/READ - XSS/NODE EXECUTION"
+console.log(obj_from_jk_str);
+// {
+// 	bool:true
+// 	date:Sun Mar 31 2019 04:31:19 GMT+0200 (W. Europe Summer Time)
+// 	function:function() {…}
+// 	infinity:Infinity
+// 	nan:NaN
+// 	null:null
+// 	num:1
+// 	regex:RegExp
+// 	str:"!"
+// 	undefined:undefined
+// }
+var jk_str_from_obj_from_jk_str = jk.stringify(obj_from_jk_str, {beautify:true});
+var jk_str_equals_jk_str_to_obj_to_str = jk_str == jk_str_from_obj_from_jk_str;
+console.log(jk_str_equals_jk_str_to_obj_to_str);
+// true
+```
+
+## animate - inspired by jQuery.js, raphael.js, velocity.js
+
+```js
+var ani_obj = jk.animate({from: 100, to: 0, duration: 300, f:log_cur_val});
+console.log(jk.stringify(ani_obj.vals,{beautify:true}));
+// {
+// 	"from": 100,
+// 	"to": 0,
+// 	"f": function log_cur_val(obj) {
+// 		console.log(obj.vals.cur_val);
+// 	},
+// 	"duration": 300,
+// 	"n": "",
+// 	"start_time": 1553996074631,
+// 	"diff_time": 0,
+// 	"abs_percent": 0,
+// 	"percent": 0,
+// 	"anim_percent": 0,
+// 	"cur_val": 0
+// }
+function log_cur_val(obj) {
+	console.log(obj.vals.cur_val);
+}
+// 98.42926826881794
+// 91.63221566676845
+// 83.32312532838978
+// 74.62420554151944
+// 66.12620797547086
+// 58.371920773959886
+// 50.45413315675924
+// 42.92864323155684
+// 36.25760102513104
+// 29.66052971894962
+setTimeout(function(){
+	ani_obj.stop();
+	console.log(jk.stringify(ani_obj.vals,{beautify:true}));
+	// {
+	// 	"from": 100,
+	// 	"to": 0,
+	// 	"f": function log_cur_val(obj) {
+	// 		console.log(obj.vals.cur_val);
+	// 	},
+	// 	"duration": 300,
+	// 	"n": "",
+	// 	"start_time": 1553996074631,
+	// 	"diff_time": 149,
+	// 	"abs_percent": 0.49666666666666665,
+	// 	"percent": 0.49666666666666665,
+	// 	"anim_percent": 0.7033947028105039,
+	// 	"cur_val": 29.66052971894962
+	// }
+	var ani_obj2 = jk.animate({from: ani_obj.vals.cur_val, to: 100, duration: 150, f:function(obj) {
+		console.log(obj.vals.cur_val);
+	}});
+	// 37.0130064544886
+	// 49.99087321040387
+	// 60.93593269113734
+	// 71.00503300421573
+	// 80.4287618333185
+	// 88.24776857633327
+	// 94.21490393754453
+	// 98.30599779211906
+	// 99.86120112292397
+	// 100
+}, 150);
 ```
 
 ## async_recursive - inspired by async.js

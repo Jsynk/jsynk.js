@@ -87,48 +87,122 @@ setTimeout(function(){
 ## html_to_dom - inspired by angular.js, react.js
 
 ```js
-jk.dom_modules.test = {
+document.querySelector('body').innerHTML = '';
+jk.dom_modules.page = {
 	html: jk.js_to_html(
 		[
 			{ t: 'div', class: 'header', style: 'font-size:10px;', c: [
-				{ t: 'b', c: [ 'header_title:' ] },
+				{ t: 'h1', class: 'title' },
 			] },
 			{ t: 'div', class: 'content', tabindex: '2', c: [
-				{ t: 'b', c: [ 'content_title:' ] },
-			] },
-			{ t: 'div', class: 'footer', c: [
-				{ t: 'b', c: [ 'footer_title:' ] },
+				{ t: 'div', jk: { p: 'list', t: 'list' } },
 			] },
 		]
 	),
-	on_init: function on_init(args) {
+	on_init: function on_init() {
 		var parent = this.parent;
+		var s = this.s;
+		var p = this.p;
+		var bp = this.bp;
+		jk.html_to_dom(parent, {s: s, p: p});
 		var el = this.el = {
-			header: parent.querySelector('.header'),
-			content: parent.querySelector('.content'),
-			footer: parent.querySelector('.footer'),
+			title: parent.querySelector('.title'),
 		};
-		// console.log(el);
+		s.on({p:bp+'title',f:function(e) {
+			var path = e.paths[0];
+			var val = s.get(path);
+			if(val){
+				el.title.innerHTML = val;
+			}
+		}});
 	}
 };
-
-var js_html = [
-	{ t: 'div', c: [
-		{ t: 'b', c: [ 'Name:' ] },
-		{ t: 'div', class: 'test', style: 'padding:10px;', tabindex: '1', jk: 'test' },
-		{ tsc: 'input', type: 'text' },
-	] }
-];
-var html = jk.js_to_html(js_html);
-var parent = jk.html_to_dom(html);
-var dom_nodes = parent.children;
-console.log(dom_nodes[0].outerHTML);
-//<div>
-//	<b>Name:</b>
-//	<div class="header test" style="font-size:10px;padding:10px;" tabindex="1"><b>header_title:</b></div>
-//	<div class="content test" tabindex="1" style="padding:10px;"><b>content_title:</b></div>
-//	<div class="footer test" tabindex="1" style="padding:10px;"><b>footer_title:</b></div>
-//	<input type="text">
+jk.dom_modules.list = {
+	html: jk.js_to_html(
+		[
+			{ t: 'div', class: 'title' },
+			{ t: 'ul', class: 'list', style: 'font-size:10px;' },
+		]
+	),
+	on_init: function on_init() {
+		var parent = this.parent;		
+		var el = this.el = {
+			title: parent.querySelector('.title'),
+			list: parent.querySelector('.list'),
+		};
+		var s = this.s;
+		var p = this.p;
+		var bp = this.bp;
+		s.on({p:bp+'title',f:function(e) {
+			var path = e.paths[0];
+			var val = s.get(path);
+			if(val){
+				el.title.innerHTML = val;
+			}
+		}});
+		s.on({p:new RegExp('^'+bp+'items.\\d+$','gm'),f:function(e) {
+			var path = e.paths[0];
+			var val = s.get(path);
+			if(val){
+				var li = jk.html_to_dom('<div jk="list_item"></div>', {s:s,p:path});
+				var lis = li.children;
+				var lis_len = lis.length;
+				for(var i = 0; i < lis_len; i++){
+					var item = lis[i];
+					el.list.appendChild(item);
+				}
+			}
+		}});
+	}
+};
+jk.dom_modules.list_item = {
+	html: jk.js_to_html(
+		[
+			{ t: 'li', class: 'item' },
+		]
+	),
+	on_init: function on_init() {
+		var parent = this.parent;		
+		var el = this.el = {
+			item: parent.querySelector('.item'),
+		};
+		var s = this.s;
+		var p = this.p;
+		var bp = p ? p + '.': '';
+		s.on({p:bp+'text',r:1,f:function(e) {
+			var val = s.get(bp+'text');
+			if(val){
+				el.item.innerHTML = val;
+			}
+		}});
+	}
+};
+var sub = jk.sub();
+var html = jk.js_to_html([
+	{t:'div', jk:{t:'page'}}
+]);
+var parent = jk.html_to_dom(html, {s: sub});
+sub.set({v:{ 
+	title: 'page title', 
+	list: { 
+		title: 'list title', 
+		items:[ 
+			{ text: 'listitem text 1' }, 
+			{ text: 'listitem text 2' } 
+		] 
+	} 
+}});
+document.querySelector('body').appendChild(parent);
+console.log(parent.innerHTML.replace(/\"{/g,"'{").replace(/}\"/g,"}'").replace(/&quot;/g, '"'));
+//<div class="header" style="font-size:10px;" jkm='{"t":"page"}'>
+//    <h1 class="title">page title</h1>
+//</div>
+//<div class="content" tabindex="2" jkm='{"t":"page"}'>
+//    <div class="title" jkm='{"p":"list","t":"list"}'>list title</div>
+//    <ul class="list" style="font-size:10px;" jkm='{"p":"list","t":"list"}'>
+//        <li class="item" jkm="list_item">listitem text 1</li>
+//        <li class="item" jkm="list_item">listitem text 2</li>
+//    </ul>
 //</div>
 ```
 

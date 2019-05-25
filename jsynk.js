@@ -1854,20 +1854,24 @@
 
             html_to_dom: (function() {
                 function html_to_dom(html, args) {
-                    var temp_div = document.createElement('div');
-                    temp_div.innerHTML = html;
-                    hp.generate({ dom_node: temp_div, args: args });
-                    return temp_div;
+                    var dom_node = html;
+                    if(typeof html == 'string'){
+                        dom_node = document.createElement('div');
+                        dom_node.innerHTML = html;
+                    }
+                    hp.generate({ dom_node: dom_node, s: args ? args.s: null, p: args ? args.p : null });
+                    return dom_node;
                 }
                 var hp = html_to_dom.prototype = {
-                    generate: function generate(options) {
-                        var dom_node = options.dom_node;
-                        var args = options.args;
+                    generate: function generate(args) {
+                        var dom_node = args.dom_node;
+                        var s = args.s;
                         var jk_doms = dom_node.querySelectorAll('[jk]');
                         var i = jk_doms.length;
                         while (i--) {
                             var li = jk_doms[i];
                             var jk_attr = li.getAttribute('jk');
+                            li.setAttribute('jkm', jk_attr);
                             li.removeAttribute('jk');                            
                             var jka_val = { type: jk_attr };
                             try {
@@ -1876,11 +1880,13 @@
                             var jka_type = jka_val.t || jka_val.type;
                             var jka_module = jk.dom_modules[jka_type];
                             if(jka_module && jka_module.html){
-                                var jka_object = {};
-                                var jkao_dp = jk.html_to_dom(jka_module.html);
+                                var jka_val_p = jka_val.p;
+                                var p = args.p && jka_val_p ? [args.p, jka_val_p || ''].join('.') : jka_val_p || args.p || '';
+                                var bp = p ? p + '.': '';
+                                var jkao_dp = jk.html_to_dom(jka_module.html, {s:s,p:p});
                                 var jkao_dom_nodes = jkao_dp.children;
-                                var li_parent = jka_object.parent = li.parentNode;
-                                jka_object.dom_nodes = li_parent.children;
+                                var li_parent = li.parentNode;
+                                var jka_object = { s: s, p: p, bp: bp, parent: li_parent };
                                 var attrs = li.attributes;
                                 var j = jkao_dom_nodes.length;
                                 while (j--) {

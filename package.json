@@ -1,11 +1,8 @@
 {
   "name": "jsynk",
-  "version": "1.0.0",
-  "description": "A lib with many small frameworks such as tools for javascript varibles to pub/sub changes, parse to html, parse to css, convert to string including functions and regex, testing, animating, diffing and some other utilities.",
+  "version": "2.0.0",
+  "description": "jSynk.js is a small javascript framework the browser/node.js with functions to convert javascript objects to publish/subscribe changes, to html, to css, html to dom, string including functions and regex, testing, benchmarking, modular loader, animating, diffing, async parallel helper functions and other utilities.",
   "main": "jsynk.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Jsynk/jsynk.js.git"
@@ -18,9 +15,13 @@
     "observer",
     "html",
     "css",
+    "dom",
     "parser",
     "diff",
-    "events",
+    "loader",
+    "async",
+    "benchmark",
+    "huid",
     "test",
     "animate",
     "stringify"
